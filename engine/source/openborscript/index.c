@@ -215,17 +215,39 @@ const char *Script_GetFunctionName(void *functionRef)
     }
 
     // Binding
-    else if (functionRef == ((void *)openbor_get_binding_property))
+    else if (functionRef == ((void *)openbor_get_bind_property))
     {
-        return "get_binding_property";
+        return "get_bind_property";
     }
-    else if (functionRef == ((void *)openbor_set_binding_property))
+    else if (functionRef == ((void *)openbor_set_bind_property))
     {
-        return "set_binding_property";
+        return "set_bind_property";
     }
-	else if (functionRef == ((void *)openbor_update_binding))
+	else if (functionRef == ((void *)openbor_update_bind))
 	{
-		return "update_binding";
+		return "update_bind";
+	}
+
+	// Drawmethod
+	else if (functionRef == ((void *)openbor_allocate_drawmethod))
+	{
+		return "allocate_drawmethod";
+	}
+	else if (functionRef == ((void *)openbor_copy_drawmethod))
+	{
+		return "copy_drawmethod";
+	}
+	else if (functionRef == ((void *)openbor_free_drawmethod))
+	{
+	return "free_drawmethod";
+	}
+	else if (functionRef == ((void *)openbor_get_drawmethod_property))
+	{
+		return "get_drawmethod_property";
+	}
+	else if (functionRef == ((void *)openbor_set_drawmethod_property))
+	{
+		return "set_drawmethod_property";
 	}
 
     else if (functionRef == ((void *)openbor_getplayerproperty))
@@ -240,16 +262,6 @@ const char *Script_GetFunctionName(void *functionRef)
     {
         return "getentityproperty";
     }
-
-    else if (functionRef == ((void *)openbor_get_energy_status_property))
-    {
-        return "get_energy_status_property";
-    }
-    else if (functionRef == ((void *)openbor_set_energy_status_property))
-    {
-        return "set_energy_status_property";
-    }
-
     else if (functionRef == ((void *)openbor_get_entity_property))
     {
         return "get_entity_property";
@@ -282,6 +294,16 @@ const char *Script_GetFunctionName(void *functionRef)
     {
         return "set_attack_property";
     }
+
+	// Recursive damage.
+	else if (functionRef == ((void *)openbor_get_recursive_damage_property))
+	{
+	return "get_recursive_damage_property";
+	}
+	else if (functionRef == ((void *)openbor_set_recursive_damage_property))
+	{
+	return "set_recursive_damage_property";
+	}
 
     // Body collision (bbox)
     else if (functionRef == ((void *)openbor_get_body_collision_collection))
@@ -883,15 +905,7 @@ void *Script_GetStringMapFunction(void *functionRef)
     else if (functionRef == ((void *)openbor_changeentityproperty))
     {
         return (void *)mapstrings_entityproperty;
-    }
-    else if (functionRef == ((void *)openbor_get_energy_status_property))
-    {
-        return (void *)mapstrings_energy_status_property;
-    }
-    else if (functionRef == ((void *)openbor_set_energy_status_property))
-    {
-        return (void *)mapstrings_energy_status_property;
-    }
+    }    
     else if (functionRef == ((void *)openbor_get_entity_property))
     {
         return (void *)mapstrings_entity_property;
@@ -908,6 +922,14 @@ void *Script_GetStringMapFunction(void *functionRef)
     {
         return (void *)mapstrings_playerproperty;
     }
+	else if (functionRef == ((void *)openbor_get_recursive_damage_property))
+	{
+		return (void *)mapstrings_recursive_damage_property;
+	}
+	else if (functionRef == ((void *)openbor_set_recursive_damage_property))
+	{
+		return (void *)mapstrings_recursive_damage_property;
+	}
 
     // Axis
     else if (functionRef == ((void *)openbor_get_axis_plane_lateral_float_property))
@@ -952,14 +974,24 @@ void *Script_GetStringMapFunction(void *functionRef)
     }
 
     // Binding
-    else if (functionRef == ((void *)openbor_get_binding_property))
+    else if (functionRef == ((void *)openbor_get_bind_property))
     {
-        return (void *)mapstrings_binding;
+        return (void *)mapstrings_bind_property;
     }
-    else if (functionRef == ((void *)openbor_set_binding_property))
+    else if (functionRef == ((void *)openbor_set_bind_property))
     {
-        return (void *)mapstrings_binding;
+        return (void *)mapstrings_bind_property;
     }
+
+	// Drawmethod
+	else if (functionRef == ((void *)openbor_get_drawmethod_property))
+	{
+		return (void *)mapstrings_drawmethod;
+	}
+	else if (functionRef == ((void *)openbor_set_drawmethod_property))
+	{
+		return (void *)mapstrings_drawmethod;
+	}
 	
     else if (functionRef == ((void *)openbor_setspawnentry))
     {
@@ -1124,11 +1156,23 @@ void Script_LoadSystemFunctions()
 
     // Binding
     List_InsertAfter(&theFunctionList,
-                     (void *)openbor_get_binding_property, "get_binding_property");
+                     (void *)openbor_get_bind_property, "get_bind_property");
     List_InsertAfter(&theFunctionList,
-                     (void *)openbor_set_binding_property, "set_binding_property");
+                     (void *)openbor_set_bind_property, "set_bind_property");
 	List_InsertAfter(&theFunctionList,
-					(void *)openbor_update_binding, "update_binding");
+					(void *)openbor_update_bind, "update_bind");
+
+	// Drawmethod
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_allocate_drawmethod, "allocate_drawmethod");
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_copy_drawmethod, "copy_drawmethod");
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_free_drawmethod, "free_drawmethod");
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_get_drawmethod_property, "get_drawmethod_property");
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_set_drawmethod_property, "set_drawmethod_property");
 
     List_InsertAfter(&theFunctionList,
                      (void *)openbor_getplayerproperty, "getplayerproperty");
@@ -1146,6 +1190,12 @@ void Script_LoadSystemFunctions()
                      (void *)openbor_get_attack_property, "get_attack_property");
     List_InsertAfter(&theFunctionList,
                      (void *)openbor_set_attack_property, "set_attack_property");
+
+	// Recursive damage properties.
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_get_recursive_damage_property, "get_recursive_damage_property");
+	List_InsertAfter(&theFunctionList,
+		(void *)openbor_set_recursive_damage_property, "set_recursive_damage_property");
 
     // Body collision (bbox) properties.
     List_InsertAfter(&theFunctionList,
@@ -1166,12 +1216,6 @@ void Script_LoadSystemFunctions()
                      (void *)openbor_get_entity_collision_property, "get_entity_collision_property");
     List_InsertAfter(&theFunctionList,
                      (void *)openbor_set_entity_collision_property, "set_entity_collision_property");
-
-    // Energy status properties.
-    List_InsertAfter(&theFunctionList,
-                     (void *)openbor_get_energy_status_property, "get_energy_status_property");
-    List_InsertAfter(&theFunctionList,
-                     (void *)openbor_get_energy_status_property, "set_energy_status_property");
 
     // Entity properties.
     List_InsertAfter(&theFunctionList,

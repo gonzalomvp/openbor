@@ -323,16 +323,17 @@ SCRIPT_BUILTINS = source/openborscript/commands.o                               
 				  source/openborscript/animation.o                                                  \
 				  source/openborscript/axis.o                                           			\
 				  source/openborscript/binding.o                                           			\
+				  source/openborscript/drawmethod.o                                           		\
                   source/openborscript/collision_attack.o                                           \
                   source/openborscript/collision_body.o                                             \
 				  source/openborscript/collision_entity.o                                           \
                   source/openborscript/constants.o                                                  \
-                  source/openborscript/energy_status.o                                             	\
                   source/openborscript/entity.o                                                   	\
                   source/openborscript/index.o                                                      \
                   source/openborscript/layer.o                                                      \
                   source/openborscript/level.o                                                      \
                   source/openborscript/math.o                                                       \
+				  source/openborscript/recursive_damage.o											\
                   source/openborscript/string.o
 RAM             = source/ramlib/ram.o
 RAND	        = source/randlib/rand32.o
@@ -564,9 +565,9 @@ endif
 
 ifdef BUILD_SDL
 ifeq ($(findstring DGE, $(SDKPATH)), DGE)
-LIBS           += -lSDL -lSDL_gfx -lts
+LIBS           += -lSDL -lts
 else
-LIBS           += -Wl,-rpath,$(LIBRARIES) -lSDL2 -lSDL2_gfx
+LIBS           += -Wl,-rpath,$(LIBRARIES) -lSDL2
 endif
 endif
 

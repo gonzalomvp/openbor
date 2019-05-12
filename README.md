@@ -6,7 +6,7 @@ Want to try your hand at game making? Open up one of the already existing module
 
 Ready to make something of your own? Get some images together and away you go! 
 
-Feeling ambitious? Delve into the built in script engine and graphical suite to build a masterpiece rivaling the most outlandish professional game productions. Sell it if you if can!
+Feeling ambitious? Delve into the built in script engine and graphical suite to build a masterpiece rivaling the most outlandish Triple-A productions. Sell it if you if can!
 
 To find out more, stop into the OpenBOR community at [ChronoCrash.com](chronocrash.com). You will also find dozens of game modules already finished to download and play.
 
@@ -36,7 +36,6 @@ These platforms are actively supported and may be compiled with the latest OpenB
 * Android
 * Windows
 * Linux
-* Mac OS X
 * Wii
 * PSP
 
@@ -47,6 +46,7 @@ The following platforms are still available as legacy binaries, but are no longe
 * Dreamcast
 * GP2X
 * GP2X Wiz
+* Mac OS X
 * OpenDingux (Dingoo A320 & GCW-Zero)
 
 ## OpenBOR Team
@@ -63,7 +63,7 @@ A developer who prefers to work on OpenBOR's supporting libraries and platform-s
 Known as O'Ilusionista, Douglas is a highly respected administrator of the OpenBOR community and also a prolific member of the Mugen scene. Douglas is new to coding but brings a plethoera of graphic and game design experience to the team. We look for exciting things from Mr. Baldan soon!
 
 #### [Malik](https://github.com/msmalik681) (2018-)
-Malik comes to the team with a good scripting background. He is still learning his way around application development, but shows a lot of promise and a great willingness to learn. As his skills progress, he will no doubt be a an invaluable asset to the team!
+Malik came to the team with a strong OpenBOR scripting background, and quickly established himself as a resident go-to for the Android Port. Malik dedicates himself to keeping the Android port of OpenBOR a commercialy viable platform for authors who wish to sell their orginal IP projects.
 
 ### Former members and contributors
 

@@ -3,7 +3,7 @@
  * -----------------------------------------------------------------------
  * All rights reserved, see LICENSE in OpenBOR root for details.
  *
- * Copyright (c) 2004 - 2013 OpenBOR Team
+ * Copyright (c) OpenBOR Team
  */
 
 /////////////////////////////////////////////////////////////////////////////
@@ -70,10 +70,9 @@ int atkchoices[MAX_ANIS]; //tempory values for ai functions, should be well enou
 const s_drawmethod plainmethod =
 {
     .table      = NULL,
-    .fp         = NULL,
     .fillcolor  = 0,
     .flag       = 1,
-    .alpha      = -1,
+    .alpha      = BLEND_MODE_MODEL,
     .remap      = -1,
     .flipx      = 0,
     .flipy      = 0,
@@ -133,7 +132,10 @@ const s_damage_recursive empty_recursive = {    .force  = 0,
                                                 .index  = 0,
                                                 .mode   = 0,
                                                 .rate   = 0,
-                                                .time   = 0};
+                                                .tick	= 0,
+												.time   = 0,
+												.owner	= NULL,
+												.next	= NULL};
 
 // unknockdown attack
 const s_collision_attack emptyattack =
@@ -167,7 +169,7 @@ const s_collision_attack emptyattack =
     .no_kill            = 0,
     .no_pain            = 0,
     .otg                = OTG_NONE,
-    .pain_time          = 0,
+    .next_hit_time          = 0,
     .pause_add          = 0,
     .recursive          = NULL,
     .seal               = 0,
@@ -310,26 +312,26 @@ int                 max_attacks         = MAX_ATTACKS;
 int                 max_animations      = MAX_ANIS;
 
 // -------dynamic animation indexes-------
-int                *animdowns           = NULL;
-int                *animups             = NULL;
-int                *animbackwalks       = NULL;
-int                *animwalks           = NULL;
-int                *animidles           = NULL;
-int                *animpains           = NULL;
-int                *animbackpains       = NULL;
-int                *animdies            = NULL;
-int                *animbackdies        = NULL;
-int                *animfalls           = NULL;
-int                *animbackfalls       = NULL;
-int                *animrises           = NULL;
-int                *animbackrises       = NULL;
-int                *animriseattacks     = NULL;
-int                *animbackriseattacks = NULL;
-int                *animblkpains        = NULL;
-int                *animbackblkpains    = NULL;
-int                *animattacks         = NULL;
-int                *animfollows         = NULL;
-int                *animspecials        = NULL;
+e_animations	*animdowns           = NULL;
+e_animations    *animups             = NULL;
+e_animations    *animbackwalks       = NULL;
+e_animations	*animwalks           = NULL;
+e_animations    *animidles           = NULL;
+e_animations    *animpains           = NULL;
+e_animations    *animbackpains       = NULL;
+e_animations    *animdies            = NULL;
+e_animations    *animbackdies        = NULL;
+e_animations    *animfalls           = NULL;
+e_animations    *animbackfalls       = NULL;
+e_animations    *animrises           = NULL;
+e_animations    *animbackrises       = NULL;
+e_animations    *animriseattacks     = NULL;
+e_animations    *animbackriseattacks = NULL;
+e_animations    *animblkpains        = NULL;
+e_animations    *animbackblkpains    = NULL;
+e_animations    *animattacks         = NULL;
+e_animations    *animfollows         = NULL;
+e_animations    *animspecials        = NULL;
 
 // system default values
 int                 downs[MAX_DOWNS]        = {ANI_DOWN};
@@ -755,13 +757,14 @@ s_playercontrols    default_control;
 int default_keys[MAX_BTN_NUM];
 
 //global script
-Script level_script;    //execute when level start
-Script endlevel_script; //execute when level finished
-Script update_script;   //execute when ingame update
-Script updated_script;  //execute when ingame update finished
-Script loading_script;	// in loading screen
-Script key_script_all;  //keyscript for all players
-Script timetick_script; //time tick script.
+Script level_script;		//execute when level start
+Script endlevel_script;		//execute when level finished
+Script update_script;		//execute when ingame update
+Script updated_script;		//execute when ingame update finished
+Script loading_script;		// in loading screen
+Script input_script_all;  //keyscript for all players
+Script key_script_all;		//keyscript for all players
+Script timetick_script;		//time tick script.
 
 //player script
 Script score_script[MAX_PLAYERS];     //execute when add score, 4 players
@@ -1037,6 +1040,7 @@ void init_scripts()
     Script_Init(&updated_script,    "updated",  NULL, 1);
     Script_Init(&level_script,      "level",    NULL,  1);
     Script_Init(&endlevel_script,   "endlevel",  NULL, 1);
+	Script_Init(&input_script_all, "inputall", NULL, 1);
     Script_Init(&key_script_all,    "keyall",   NULL,  1);
     Script_Init(&timetick_script,   "timetick",  NULL, 1);
     Script_Init(&loading_script,    "loading",   NULL, 1);
@@ -1086,6 +1090,10 @@ void load_scripts()
     {
         Script_Clear(&endlevel_script,      2);
     }
+	if (!load_script(&input_script_all, "data/scripts/inputall.c"))
+	{
+		Script_Clear(&input_script_all, 2);
+	}
     if(!load_script(&key_script_all,    "data/scripts/keyall.c"))
     {
         Script_Clear(&key_script_all,       2);
@@ -1182,6 +1190,7 @@ void load_scripts()
     Script_Compile(&updated_script);
     Script_Compile(&level_script);
     Script_Compile(&endlevel_script);
+	Script_Compile(&input_script_all);
     Script_Compile(&key_script_all);
     Script_Compile(&timetick_script);
     Script_Compile(&loading_script);
@@ -1230,6 +1239,7 @@ void clear_scripts()
     Script_Clear(&updated_script,   2);
     Script_Clear(&level_script,     2);
     Script_Clear(&endlevel_script,  2);
+	Script_Clear(&input_script_all, 2);
     Script_Clear(&key_script_all,   2);
     Script_Clear(&timetick_script,  2);
     Script_Clear(&loading_script,   2);
@@ -1428,7 +1438,7 @@ void execute_takedamage_script(entity *ent, entity *other, s_collision_attack *a
 // 2018-08-30
 //
 // Run on the bind target when updating a bind.
-void execute_on_bind_update_other_to_self(entity *ent, entity *other, s_bind *binding)
+void execute_on_bind_update_other_to_self(entity *ent, entity *other, s_bind *bind)
 {
     ScriptVariant tempvar;
     Script *cs = ent->scripts->on_bind_update_other_to_self_script;
@@ -1439,21 +1449,21 @@ void execute_on_bind_update_other_to_self(entity *ent, entity *other, s_bind *bi
         ScriptVariant_ChangeType(&tempvar, VT_PTR);
 
         tempvar.ptrVal = (entity *)ent;
-        Script_Set_Local_Variant(cs, "self",    &tempvar);
+        Script_Set_Local_Variant(cs, "self", &tempvar);
 
         tempvar.ptrVal = (entity *)other;
-        Script_Set_Local_Variant(cs, "other",   &tempvar);
+        Script_Set_Local_Variant(cs, "other", &tempvar);
 
-        tempvar.ptrVal = (s_bind *)binding;
-        Script_Set_Local_Variant(cs, "binding", &tempvar);
+        tempvar.ptrVal = (s_bind *)bind;
+        Script_Set_Local_Variant(cs, "bind", &tempvar);
 
         Script_Execute(cs);
 
         //clear to save variant space
         ScriptVariant_Clear(&tempvar);
-        Script_Set_Local_Variant(cs, "self",        &tempvar);
-        Script_Set_Local_Variant(cs, "other",       &tempvar);
-        Script_Set_Local_Variant(cs, "binding",     &tempvar);
+        Script_Set_Local_Variant(cs, "self",	&tempvar);
+        Script_Set_Local_Variant(cs, "other",	&tempvar);
+        Script_Set_Local_Variant(cs, "bind",	&tempvar);
     }
 }
 
@@ -1461,7 +1471,7 @@ void execute_on_bind_update_other_to_self(entity *ent, entity *other, s_bind *bi
 // 2018-08-30
 //
 // Run on bound entity when updating bind.
-void execute_on_bind_update_self_to_other(entity *ent, entity *other, s_bind *binding)
+void execute_on_bind_update_self_to_other(entity *ent, entity *other, s_bind *bind)
 {
     ScriptVariant tempvar;
     Script *cs = ent->scripts->on_bind_update_self_to_other_script;
@@ -1472,21 +1482,21 @@ void execute_on_bind_update_self_to_other(entity *ent, entity *other, s_bind *bi
         ScriptVariant_ChangeType(&tempvar, VT_PTR);
 
         tempvar.ptrVal = (entity *)ent;
-        Script_Set_Local_Variant(cs, "self",    &tempvar);
+        Script_Set_Local_Variant(cs, "self", &tempvar);
 
         tempvar.ptrVal = (entity *)other;
-        Script_Set_Local_Variant(cs, "other",   &tempvar);
+        Script_Set_Local_Variant(cs, "other", &tempvar);
 
-        tempvar.ptrVal = (s_bind *)binding;
-        Script_Set_Local_Variant(cs, "binding", &tempvar);
+        tempvar.ptrVal = (s_bind *)bind;
+        Script_Set_Local_Variant(cs, "bind", &tempvar);
 
         Script_Execute(cs);
 
         //clear to save variant space
         ScriptVariant_Clear(&tempvar);
-        Script_Set_Local_Variant(cs, "self",        &tempvar);
-        Script_Set_Local_Variant(cs, "other",       &tempvar);
-        Script_Set_Local_Variant(cs, "binding",     &tempvar);
+        Script_Set_Local_Variant(cs, "self",	&tempvar);
+        Script_Set_Local_Variant(cs, "other",	&tempvar);
+        Script_Set_Local_Variant(cs, "bind",	&tempvar);
     }
 }
 
@@ -2292,6 +2302,34 @@ void execute_level_key_script(int player)
     }
 }
 
+void execute_input_script_all(int player)
+{
+	ScriptVariant tempvar;
+	Script *cs = &input_script_all;
+	if (Script_IsInitialized(cs))
+	{
+		ScriptVariant_Init(&tempvar);
+
+		//ScriptVariant_ChangeType(&tempvar, VT_PTR);
+
+		//tempvar.ptrVal = (VOID *)player_object;
+		//Script_Set_Local_Variant(cs, "player_object", &tempvar);
+
+		ScriptVariant_ChangeType(&tempvar, VT_INTEGER);
+		tempvar.lVal = (LONG)player;
+		
+		Script_Set_Local_Variant(cs, "player", &tempvar);
+		
+		Script_Execute(cs);
+		
+		//clear to save variant space
+		ScriptVariant_Clear(&tempvar);
+		Script_Set_Local_Variant(cs, "player", &tempvar);
+		//Script_Set_Local_Variant(cs, "player_object", &tempvar);
+	}
+}
+
+
 void execute_key_script_all(int player)
 {
     ScriptVariant tempvar;
@@ -2497,9 +2535,6 @@ void clearsettings()
     savedata.compatibleversion = COMPATIBLEVERSION;
     savedata.gamma = 0;
     savedata.brightness = 0;
-    savedata.usesound = 1;
-    savedata.soundrate = 44100;
-    savedata.soundbits = 16;
     savedata.soundvol = 15;
     savedata.usemusic = 1;
     savedata.musicvol = 100;
@@ -2512,6 +2547,7 @@ void clearsettings()
     savedata.uselog = 1;
     savedata.debuginfo = 0;
     savedata.fullscreen = 0;
+    savedata.vsync = 1;
 
 	#if WII
     savedata.stretch = 1;
@@ -4158,8 +4194,8 @@ s_sprite *loadsprite2(char *filename, int *width, int *height)
     encodesprite(-clip_left, -clip_top, bitmap, sprite);
     sprite->offsetx = clip_left;
     sprite->offsety = clip_top;
-    sprite->srcwidth = bitmap->width;
-    sprite->srcheight = bitmap->height;
+    sprite->srcwidth = bitmap->clipped_width;
+    sprite->srcheight = bitmap->clipped_height;
 
     // Delete the raw bitmap, we don't need it
     // any more.
@@ -4395,8 +4431,8 @@ int loadsprite(char *filename, int ofsx, int ofsy, int bmpformat)
     sprite_map[sprites_loaded].centery = ofsy - clipt;
     sprite_list->sprite->offsetx = clipl;
     sprite_list->sprite->offsety = clipt;
-    sprite_list->sprite->srcwidth = bitmap->width;
-    sprite_list->sprite->srcheight = bitmap->height;
+    sprite_list->sprite->srcwidth = bitmap->clipped_width;
+    sprite_list->sprite->srcheight = bitmap->clipped_height;
     freebitmap(bitmap);
     ++sprites_loaded;
     return sprites_loaded - 1;
@@ -4406,35 +4442,43 @@ void load_special_sprites()
 {
     memset(shadowsprites, -1, sizeof(*shadowsprites) * 6);
     golsprite = gosprite = -1;
-    if(testpackfile("data/sprites/shadow1.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow1.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow1.png", packfile) >= 0)
     {
         shadowsprites[0] = loadsprite("data/sprites/shadow1", 9, 3, pixelformat);
     }
-    if(testpackfile("data/sprites/shadow2.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow2.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow2.png", packfile) >= 0)
     {
         shadowsprites[1] = loadsprite("data/sprites/shadow2", 14, 5, pixelformat);
     }
-    if(testpackfile("data/sprites/shadow3.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow3.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow3.png", packfile) >= 0)
     {
         shadowsprites[2] = loadsprite("data/sprites/shadow3", 19, 6, pixelformat);
     }
-    if(testpackfile("data/sprites/shadow4.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow4.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow4.png", packfile) >= 0)
     {
         shadowsprites[3] = loadsprite("data/sprites/shadow4", 24, 8, pixelformat);
     }
-    if(testpackfile("data/sprites/shadow5.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow5.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow5.png", packfile) >= 0)
     {
         shadowsprites[4] = loadsprite("data/sprites/shadow5", 29, 9, pixelformat);
     }
-    if(testpackfile("data/sprites/shadow6.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/shadow6.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/shadow6.png", packfile) >= 0)
     {
         shadowsprites[5] = loadsprite("data/sprites/shadow6", 34, 11, pixelformat);
     }
-    if(testpackfile("data/sprites/arrow.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/arrow.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/arrow.png", packfile) >= 0)
     {
         gosprite  = loadsprite("data/sprites/arrow", 35, 23, pixelformat);
     }
-    if(testpackfile("data/sprites/arrowl.gif", packfile) >= 0)
+    if (testpackfile("data/sprites/arrowl.gif", packfile) >= 0 ||
+        testpackfile("data/sprites/arrowl.png", packfile) >= 0)
     {
         golsprite = loadsprite("data/sprites/arrowl", 35, 23, pixelformat);
     }
@@ -4640,128 +4684,375 @@ int load_special_sounds()
     return 1;
 }
 
-int nextcolourmap(s_model *model, int c)
+// Caskey, Damon V.
+// 2019-01-02
+//
+// Return true if map_index matches a special purpose
+// map or falls within author defined hidden map range, 
+// unless any of the above are same as default map (0).
+int is_map_hidden(s_model *model, int map_index)
 {
-    do
-    {
-        c++;
-        if(c > model->maps_loaded)
-        {
-            c = 0;
-        }
-    }
-    while(    // Keep looping until a non frozen map is found
-        (model->maps.frozen > 0 && c == model->maps.frozen) ||
-        (model->maps.hide_start > 0 && c >= model->maps.hide_start && c <= model->maps.hide_end)
-    );
+	// Have frozen map and it isn't same as default?
+	// If we do and it matches, return true.
+	if (model->maps.frozen > 0)
+	{
+		if (map_index == model->maps.frozen)
+		{
+			return 1;
+		}
+	}
 
-    return c;
+	// Check KO map. Same logic as frozen.
+	if (model->maps.ko > 0)
+	{
+		if (map_index == model->maps.ko)
+		{
+			return 1;
+		}
+	}
+
+	// Hidden map range. Both should be
+	// something other than default. If 
+	// they are and map index is in range
+	// we return true.
+	if (model->maps.hide_start > 0 
+		&& model->maps.hide_end > 0)
+	{
+		if (map_index >= model->maps.hide_start
+			&& map_index <= model->maps.hide_end)
+		{
+			return 1;
+		}
+	}
+
+	// If we got this far, there's no match. 
+	return 0;
 }
 
-int nextcolourmapn(s_model *model, int c, int p)
+// Return model's next selectable map index in line.
+int nextcolourmap(s_model *model, int map_index)
 {
-    int color_index = nextcolourmap(model, c);
+	// Increment to next color set, or return to 0 
+	// if we go past number of available sets. 
+	// Continue until we find an index that
+	// isn't hidden.
+    do
+    {
+		map_index++;
+
+        if(map_index > model->maps_loaded)
+        {
+			map_index = 0;
+        }
+    }
+    while(is_map_hidden(model, map_index));
+
+    return map_index;
+}
+
+// Increment to next map in player's (player_index) model
+// while avoiding the map another player with same 
+// is using.
+int nextcolourmapn(s_model *model, int map_index, int player_index)
+{
+	// Increment to next index.
+	map_index = nextcolourmap(model, map_index);
+
     s_set_entry *set = levelsets + current_set;
 
-    if ( colourselect && (set->nosame & 2) )
+	// If color selection is allowed but identical map is 
+	// not (nosame 2), then let's make sure anohter player 
+	// with same model isn't already using this map.
+	// If they are we'll find the next map available.
+    if (colourselect && (set->nosame & 2))
     {
-        int i = 0, j = 0;
+		int i = 0;
+		int j = 0;
         int maps_count = model->maps_loaded + 1;
         int used_colors_map[maps_count];
         int used_color_count = 0;
 
-        // reset color map
-        for(i = 0; i < maps_count; i++) used_colors_map[i] = 0;
-        // check max color map count
-        if (model->maps.frozen > 0) --maps_count;
-        if (model->maps.hide_start > 0) maps_count -= model->maps.hide_end - model->maps.hide_start + 1;
+        // Reset local used map array elements to 0.
+		for (i = 0; i < maps_count; i++)
+		{
+			used_colors_map[i] = 0;
+		}
 
-        // map all used colors
+        // Deduct hidden maps from map count.
+		if (model->maps.frozen > 0)
+		{
+			--maps_count;
+		}
+
+		if (model->maps.ko > 0)
+		{
+			--maps_count;
+		}
+
+		if (model->maps.hide_start > 0)
+		{
+			maps_count -= model->maps.hide_end - model->maps.hide_start + 1;
+		}
+
+        // This logic attempts to populate used_colors_map array with
+		// every color in use by other players who picking same
+		// character. If there are aren't enough unused map indexes to
+		// go around (i.e. three players select a character that only
+		// has two maps), then we return initial map selection.
+
         for(i = 0; i < MAX_PLAYERS; i++)
-        {
-            if ( p != i && stricmp(player[p].name, player[i].name) == 0 )
+        {			
+			// Compare every player index to player_index argument. If
+			// it's a different index but that index's model matches
+			// player_index's model, then it's another player choosing 
+			// (or about to choose) the same character.
+
+            if (player_index != i 
+				&& 
+				stricmp(player[player_index].name, player[i].name) == 0)
             {
+				// Use the map index as an array element index, and mark it true.
+				// Now we now this map index is in use.
                 used_colors_map[player[i].colourmap] = 1;
-                ++used_color_count;
-                // all busy colors? return the next natural
-                if (used_color_count >= maps_count) return color_index;
+                
+				// Increment number of used map indexes.
+				++used_color_count;
+                
+				// If all the map indexes are used, we'll just
+				// have to settle for one we already picked.
+				if (used_color_count >= maps_count)
+				{
+					return map_index;
+				}
             }
         }
 
-        // search the first free color
-        for(i = color_index, j = 0; j < maps_count; j++)
+		// Now that we have a list of used maps, let's employ it to
+		// find the first free map.
+		//
+        // Loop to number of maps for the model. If our used_colors_map
+		// array element matching the map index doesn't have a true
+		// value, we can return the index.
+
+        for(i = map_index, j = 0; j < maps_count; j++)
         {
-            if ( !used_colors_map[i] )
+            if (!used_colors_map[i])
             {
-                return i;
+				return i;
             }
+
             i = nextcolourmap(model, i);
         }
     }
 
-    return color_index;
+	// If we got here, then we couldn't find a free map index,
+	// so just return initial selection.
+    return map_index;
 }
 
-int prevcolourmap(s_model *model, int c)
+// Return model's previous selectable map index in line.
+int prevcolourmap(s_model *model, int map_index)
 {
+	// Decrement to previous color set, or return 
+	// to last set if we go below 0. Continue until
+	// we find an index that isn't hidden.
     do
     {
-        c--;
-        if(c < 0)
+		map_index--;
+        if(map_index < 0)
         {
-            c = model->maps_loaded;
+			map_index = model->maps_loaded;
         }
     }
-    while(    // Keep looping until a non frozen map is found
-        (model->maps.frozen > 0 && c == model->maps.frozen) ||
-        (model->maps.hide_start > 0 && c >= model->maps.hide_start && c <= model->maps.hide_end)
-    );
+    while(is_map_hidden(model, map_index));
 
-    return c;
+    return map_index;
 }
 
-int prevcolourmapn(s_model *model, int c, int p)
+// Decrement to previous map in player's (player_index) model
+// while avoiding the map another player with same 
+// is using.
+int prevcolourmapn(s_model *model, int map_index, int player_index)
 {
-    int color_index = prevcolourmap(model, c);
-    s_set_entry *set = levelsets + current_set;
+	// Decrement to previous index.
+	map_index = prevcolourmap(model, map_index);
 
-    if ( colourselect && (set->nosame & 2) )
-    {
-        int i = 0, j = 0;
-        int maps_count = model->maps_loaded + 1;
-        int used_colors_map[maps_count];
-        int used_color_count = 0;
+	s_set_entry *set = levelsets + current_set;
 
-        // reset color map
-        for(i = 0; i < maps_count; i++) used_colors_map[i] = 0;
-        // check max color map count
-        if (model->maps.frozen > 0) --maps_count;
-        if (model->maps.hide_start > 0) maps_count -= model->maps.hide_end - model->maps.hide_start + 1;
+	// If color selection is allowed but identical map is 
+	// not (nosame 2), then let's make sure anohter player 
+	// with same model isn't already using this map.
+	// If they are we'll find the next map available.
+	if (colourselect && (set->nosame & 2))
+	{
+		int i = 0;
+		int j = 0;
+		int maps_count = model->maps_loaded + 1;
+		int used_colors_map[maps_count];
+		int used_color_count = 0;
 
-        // map all used colors
-        for(i = 0; i < MAX_PLAYERS; i++)
-        {
-            if ( p != i && stricmp(player[p].name, player[i].name) == 0 )
-            {
-                used_colors_map[player[i].colourmap] = 1;
-                ++used_color_count;
-                // all busy colors? return the next natural
-                if (used_color_count >= maps_count) return color_index;
-            }
-        }
+		// Reset local used map array elements to 0.
+		for (i = 0; i < maps_count; i++)
+		{
+			used_colors_map[i] = 0;
+		}
 
-        // search the first free color
-        for(i = color_index, j = 0; j < maps_count; j++)
-        {
-            if ( !used_colors_map[i] )
-            {
-                return i;
-            }
-            i = prevcolourmap(model, i);
-        }
-    }
+		// Deduct hidden maps from map count.
+		if (model->maps.frozen > 0)
+		{
+			--maps_count;
+		}
 
-    return color_index;
+		if (model->maps.ko > 0)
+		{
+			--maps_count;
+		}
+
+		if (model->maps.hide_start > 0)
+		{
+			maps_count -= model->maps.hide_end - model->maps.hide_start + 1;
+		}
+
+		// This logic attempts to populate used_colors_map array with
+		// every color in use by other players who picking same
+		// character. If there are aren't enough unused map indexes to
+		// go around (i.e. three players select a character that only
+		// has two maps), then we return initial map selection.
+
+		for (i = 0; i < MAX_PLAYERS; i++)
+		{
+			// Compare every player index to player_index argument. If
+			// it's a different index but that index's model matches
+			// player_index's model, then it's another player choosing 
+			// (or about to choose) the same character.
+
+			if (player_index != i
+				&&
+				stricmp(player[player_index].name, player[i].name) == 0)
+			{
+				// Use the map index as an array element index, and mark it true.
+				// Now we now this map index is in use.
+				used_colors_map[player[i].colourmap] = 1;
+
+				// Increment number of used map indexes.
+				++used_color_count;
+
+				// If all the map indexes are used, we'll just
+				// have to settle for one we already picked.
+				if (used_color_count >= maps_count)
+				{
+					return map_index;
+				}
+			}
+		}
+
+		// Now that we have a list of used maps, let's employ it to
+		// find the first free map.
+		//
+		// Loop to number of maps for the model. If our used_colors_map
+		// array element matching the map index doesn't have a true
+		// value, we can return the index.
+
+		for (i = map_index, j = 0; j < maps_count; j++)
+		{
+			if (!used_colors_map[i])
+			{
+				return i;
+			}
+
+			i = prevcolourmap(model, i);
+		}
+	}
+
+	// If we got here, then we couldn't find a free map index,
+	// so just return initial selection.
+	return map_index;
+}
+
+// Caskey, Damon V.
+// 2019-01-02
+//
+// Return true if a model cache element is selectable by player.
+int is_model_cache_index_selectable(int cache_index)
+{
+	// Must have selectable flag.
+	if (!model_cache[cache_index].selectable)
+	{
+		return 0;
+	}
+
+	// Element must contain a valid model.
+	if (!model_cache[cache_index].model)
+	{
+		return 0;
+	}
+	
+	// Element's model must be selectable.
+	if (!is_model_selectable(model_cache[cache_index].model))
+	{
+		return 0;
+	}
+
+	// All checks passed. Return true.
+	return 1;
+}
+
+// Caskey, Damon V.
+// 2019-01-02
+//
+// Return true if a model is selectable by player.
+int is_model_selectable(s_model *model)
+{
+	// Must be a player type.
+	if (model->type != TYPE_PLAYER)
+	{
+		return 0;
+	}
+
+	// If model is marked secret, then secret
+	// characters must be allowed.
+	if (model->secret)
+	{
+		if (!allow_secret_chars)
+		{
+			return 0;
+		}
+	}
+
+	// 2019-01-02 DC: Not sure what this is. 
+	// TO DO - Document clearcount vs. bonus.
+	if (model->clearcount > bonus)
+	{
+		return 0;
+	}
+
+	// Got this far, we can return true.
+	return 1;
+}
+
+// Caskey, Damon V.
+// 2019-01-03
+//
+// Return current number of player selectable models.
+int find_selectable_model_count()
+{
+	int result;
+	int i;
+
+	result = 0;
+
+	// Loop over model cache and increment
+	// count each time we find a selectable
+	// model.
+	for (i = 0; i < models_cached; i++)
+	{
+		if (is_model_cache_index_selectable(i))
+		{
+			++result;
+		}
+	}
+
+	return result;
 }
 
 // Use by player select menus
@@ -4770,7 +5061,9 @@ s_model *nextplayermodel(s_model *current)
     int i;
     int curindex = -1;
     int loops;
-    if(current)
+    
+	// Do we have a model?
+	if(current)
     {
         // Find index of current player model
         for(i = 0; i < models_cached; i++)
@@ -4782,26 +5075,28 @@ s_model *nextplayermodel(s_model *current)
             }
         }
     }
+
     // Find next player model (first one after current index)
     for(i = curindex + 1, loops = 0; loops < models_cached; i++, loops++)
     {
+		// Return to 0 if we've gone past the last model.
         if(i >= models_cached)
         {
             i = 0;
         }
-        if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
-                (allow_secret_chars || !model_cache[i].model->secret) &&
-                model_cache[i].model->clearcount <= bonus && model_cache[i].selectable)
+
+		// If valid and selectable, return the model.
+        if(is_model_cache_index_selectable(i))
         {
-            //printf("next %s\n", model_cache[i].model->name);
-            return model_cache[i].model;
+			//printf("next %s\n", model_cache[i].model->name);
+			return model_cache[i].model;            
         }
     }
     borShutdown(1, "Fatal: can't find any player models!");
     return NULL;
 }
 
-s_model *nextplayermodeln(s_model *current, int p)
+s_model *nextplayermodeln(s_model *current, int player_index)
 {
     int i;
     s_set_entry *set = levelsets + current_set;
@@ -4809,34 +5104,31 @@ s_model *nextplayermodeln(s_model *current, int p)
 
     if(set->nosame & 1)
     {
-        int used_player_count = 0, player_count = 0;
+		int used_player_count = 0;
+		int player_count = 0;
 
-        // check count of selectable players
-        for(i = 0; i < models_cached; i++)
-        {
-            if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
-                    (allow_secret_chars || !model_cache[i].model->secret) &&
-                    model_cache[i].model->clearcount <= bonus && model_cache[i].selectable)
-            {
-                ++player_count;
-            }
-        }
+		// Get number of selectable models.
+		player_count = find_selectable_model_count();
 
         // count all used player
         for(i = 0; model && i < MAX_PLAYERS; i++)
         {
-            if(i != p && stricmp(player[p].name, player[i].name) == 0)
+            if(i != player_index 
+				&& stricmp(player[player_index].name, player[i].name) == 0)
             {
                 ++used_player_count;
                 // all busy players? return the next natural
-                if (used_player_count >= player_count) return model;
+				if (used_player_count >= player_count)
+				{
+					return model;
+				}
             }
         }
 
         // search the first free player
         for(i = 0; model && i < MAX_PLAYERS; i++)
         {
-            if(i != p && stricmp(model->name, player[i].name) == 0)
+            if(i != player_index && stricmp(model->name, player[i].name) == 0)
             {
                 i = -1;
                 model = nextplayermodel(model);
@@ -4872,9 +5164,9 @@ s_model *prevplayermodel(s_model *current)
         {
             i = models_cached - 1;
         }
-        if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
-                (allow_secret_chars || !model_cache[i].model->secret) &&
-                model_cache[i].model->clearcount <= bonus && model_cache[i].selectable)
+
+		// If valid and selectable, return the model.
+        if(is_model_cache_index_selectable(i))
         {
             //printf("prev %s\n", model_cache[i].model->name);
             return model_cache[i].model;
@@ -4884,7 +5176,7 @@ s_model *prevplayermodel(s_model *current)
     return NULL;
 }
 
-s_model *prevplayermodeln(s_model *current, int p)
+s_model *prevplayermodeln(s_model *current, int player_index)
 {
     int i;
     s_set_entry *set = levelsets + current_set;
@@ -4892,23 +5184,16 @@ s_model *prevplayermodeln(s_model *current, int p)
 
     if(set->nosame & 1)
     {
-        int used_player_count = 0, player_count = 0;
+		int used_player_count = 0; 
+		int player_count = 0;
 
-        // check count of selectable players
-        for(i = 0; i < models_cached; i++)
-        {
-            if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
-                    (allow_secret_chars || !model_cache[i].model->secret) &&
-                    model_cache[i].model->clearcount <= bonus && model_cache[i].selectable)
-            {
-                ++player_count;
-            }
-        }
+		// Get number of selectable models.
+		player_count = find_selectable_model_count();
 
         // count all used player
         for(i = 0; model && i < MAX_PLAYERS; i++)
         {
-            if(i != p && stricmp(player[p].name, player[i].name) == 0)
+            if(i != player_index && stricmp(player[player_index].name, player[i].name) == 0)
             {
                 ++used_player_count;
                 // all busy players? return the prev natural
@@ -4919,7 +5204,7 @@ s_model *prevplayermodeln(s_model *current, int p)
         // search the first free player
         for(i = 0; model && i < MAX_PLAYERS; i++)
         {
-            if(i != p && stricmp(model->name, player[i].name) == 0)
+            if(i != player_index && stricmp(model->name, player[i].name) == 0)
             {
                 i = -1;
                 model = prevplayermodel(model);
@@ -6270,6 +6555,14 @@ static int translate_ani_id(const char *value, s_model *newchar, s_anim *newanim
     {
         ani_id = ANI_SELECT;
     }
+	else if (stricmp(value, "selectin") == 0)
+	{		
+		ani_id = ANI_SELECTIN;
+	}
+	else if (stricmp(value, "selectout") == 0)
+	{
+		ani_id = ANI_SELECTOUT;
+	}
     else if(starts_with_num(value, "walk"))
     {
         get_tail_number(tempInt, value, "walk");
@@ -7193,6 +7486,14 @@ static int translate_ani_id(const char *value, s_model *newchar, s_anim *newanim
         newanim->range.x.min = 1;
         newanim->range.x.max = 100;
     }
+	else if (stricmp(value, "blockrelease") == 0) 
+	{
+		ani_id = ANI_BLOCKRELEASE;
+	}
+	else if (stricmp(value, "blockstart") == 0)
+	{
+		ani_id = ANI_BLOCKSTART;
+	}
     else if(starts_with_num(value, "follow"))
     {
         get_tail_number(tempInt, value, "follow");
@@ -7414,7 +7715,7 @@ void lcmHandleCommandName(ArgList *arglist, s_model *newchar, int cacheindex)
     newchar->name = model_cache[cacheindex].name;
     if(stricmp(newchar->name, "steam") == 0)
     {
-        newchar->alpha = 1;
+        newchar->alpha = BLEND_MODE_ALPHA;
     }
 }
 
@@ -8511,7 +8812,7 @@ s_model *init_model(int cacheindex, int unload)
     newchar->mpswitch                   = -1;       // switch between reduce mp or gain mp for mpstabletype 4
     newchar->weaploss[0]                = WEAPLOSS_TYPE_ANY;
     newchar->weaploss[1]                = -1;
-    newchar->lifespan                   = 0x7fffffff;
+    newchar->lifespan                   = LIFESPAN_DEFAULT;
     newchar->summonkill                 = 1;
     newchar->candamage                  = -1;
     newchar->hostile                    = -1;
@@ -8797,6 +9098,9 @@ s_model *load_cached_model(char *name, char *owner, char unload)
     addModel(newchar);
 
     attack = emptyattack;      // empty attack
+
+	attack.dropv = default_model_dropv;
+
     bbox_con = empty_body;
     ebox_con = empty_entity_collision;
 
@@ -10103,6 +10407,7 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 ebox_con                        = empty_entity_collision;
                 body_coords                     = empty_collision_coords;
                 attack                          = emptyattack;
+				attack.dropv					= default_model_dropv;
                 attack_coords                   = empty_collision_coords;
                 recursive                       = empty_recursive;
                 attack.hitsound                 = SAMPLE_BEAT;
@@ -10533,7 +10838,7 @@ s_model *load_cached_model(char *name, char *owner, char unload)
             case CMD_MODEL_FASTATTACK:
                 if(GET_INT_ARG(1))
                 {
-                    attack.pain_time = GAME_SPEED / 20;
+                    attack.next_hit_time = GAME_SPEED / 20;
                 }
                 break;
             case CMD_MODEL_IGNOREATTACKID:
@@ -10791,22 +11096,49 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 attack.steal = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_DAMAGE_TYPE:
-                attack.attack_type = GET_INT_ARG(1);
+
+				value = GET_ARG(1);
+
+				if (stricmp(value, "burn") == 0)
+				{
+					attack.attack_type = ATK_BURN;
+				}
+				else if(stricmp(value, "freeze") == 0)
+				{
+					attack.attack_type = ATK_FREEZE;
+				}
+				else if (stricmp(value, "shock") == 0)
+				{
+					attack.attack_type = ATK_SHOCK;
+				}
+				else if (stricmp(value, "steal") == 0)
+				{
+					attack.attack_type = ATK_STEAL;
+				}
+				else
+				{
+					attack.attack_type = GET_INT_ARG(1);
+				}
+
                 break;
+
             case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_FORCE:
-                recursive.force = GET_INT_ARG(1);
+				recursive.force = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_INDEX:
-                recursive.index = GET_INT_ARG(1);
+				recursive.index = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_MODE:
-                recursive.mode = GET_INT_ARG(1);
+				recursive.mode = GET_INT_ARG(1);
                 break;
+			case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_TAG:
+				recursive.tag = GET_INT_ARG(1);
+				break;
             case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_TIME_RATE:
-                recursive.rate = GET_INT_ARG(1);
+				recursive.rate = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_DAMAGE_RECURSIVE_TIME_EXPIRE:
-                recursive.time = GET_INT_ARG(1);
+				recursive.time = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_REACTION_FALL_FORCE:
                 attack.attack_drop = GET_INT_ARG(1);
@@ -10826,11 +11158,11 @@ s_model *load_cached_model(char *name, char *owner, char unload)
 
                 if(stricmp(value, "none") == 0 || value == 0)
                 {
-                    newchar->bflash = -1;
+                    attack.blockflash = -1;
                 }
                 else
                 {
-                    newchar->bflash = get_cached_model_index(value);
+					attack.blockflash = get_cached_model_index(value);
                 }
                 break;
 
@@ -10854,11 +11186,11 @@ s_model *load_cached_model(char *name, char *owner, char unload)
 
                 if(stricmp(value, "none") == 0 || value == 0)
                 {
-                    newchar->flash = -1;
+                    attack.hitflash = -1;
                 }
                 else
                 {
-                    newchar->flash = get_cached_model_index(value);
+                    attack.hitflash = get_cached_model_index(value);
                 }
                 break;
 
@@ -10901,7 +11233,7 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 attack.freezetime = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_REACTION_INVINCIBLE_TIME:
-                attack.pain_time = GET_INT_ARG(1);
+                attack.next_hit_time = GET_INT_ARG(1);
                 break;
             case CMD_MODEL_COLLISION_REACTION_REPOSITION_DISTANCE:
                 attack.grab_distance = GET_INT_ARG(1);
@@ -10964,9 +11296,6 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 abox.y = GET_INT_ARG(2);
                 abox.width = GET_INT_ARG(3);
                 abox.height = GET_INT_ARG(4);
-                attack.dropv.y = default_model_dropv.y;
-                attack.dropv.x = default_model_dropv.x;
-                attack.dropv.z = default_model_dropv.z;
                 attack.attack_force = GET_INT_ARG(5);
 
                 attack.attack_drop = GET_INT_ARG(6);
@@ -11138,9 +11467,10 @@ s_model *load_cached_model(char *name, char *owner, char unload)
 
                 recursive.index  = GET_INT_ARG(1);  //Index.
                 recursive.time   = GET_INT_ARG(2);  //Time to expiration.
-                recursive.mode   = GET_INT_ARG(3);  //Mode, see damage_recursive.
+                recursive.mode	 = GET_INT_ARG(3);  //Mode, see damage_recursive.
                 recursive.force  = GET_INT_ARG(4);  //Amount per tick.
                 recursive.rate   = GET_INT_ARG(5);  //Tick delay.
+
                 break;
 
             case CMD_MODEL_FORCEMAP:
@@ -14672,11 +15002,11 @@ void load_level(char *filename)
             dm->transbg = GET_INT_ARG(i + 10); // transparency
             dm->alpha = GET_INT_ARG(i + 11); // alpha
             dm->water.watermode = GET_INT_ARG(i + 12); // water
-            if(dm->water.watermode == 3)
+            if(dm->water.watermode == WATER_MODE_SHEAR)
             {
                 dm->water.beginsize = GET_FLOAT_ARG(i + 13); // beginsize
                 dm->water.endsize = GET_FLOAT_ARG(i + 14); // endsize
-                dm->water.perspective = GET_INT_ARG(i + 15); // amplitude
+                dm->water.perspective = GET_INT_ARG(i + 15); // perspective
             }
             else
             {
@@ -14740,8 +15070,8 @@ void load_level(char *filename)
             dm->xrepeat = -1; // x repeat
             dm->yrepeat = 1; // z repeat
             dm->transbg = 0; // transparency
-            dm->alpha = 0; // alpha
-            dm->water.watermode = 2; // amplitude
+            dm->alpha = BLEND_MODE_NONE; // alpha
+            dm->water.watermode = WATER_MODE_SINE;
             dm->water.amplitude = GET_INT_ARG(2); // amplitude
             dm->water.wavelength = 40; // wavelength
             dm->water.wavespeed = 1.0; // waterspeed
@@ -15009,7 +15339,7 @@ void load_level(char *filename)
 
                 bgl->z = SCREENPANEL_Z;
                 bgl->neon = 0;
-                dm->alpha = 1;
+                dm->alpha = BLEND_MODE_ALPHA;
                 bgl->gfx.handle = NULL;
                 load_layer(GET_ARG(3), maskPath, level->numlayers);
                 level->numlayers++;
@@ -15478,10 +15808,10 @@ void load_level(char *filename)
                 dm = &(bgl->drawmethod);
                 if(level->rocking)
                 {
-                    dm->water.watermode = 3;
+                    dm->water.watermode = WATER_MODE_SHEAR;
                     dm->water.beginsize = 1.0;
                     dm->water.endsize = 1 + bgl->size.y / 11.0;
-                    dm->water.perspective = 0;
+                    dm->water.perspective = WATER_PERSPECTIVE_NONE;
                     bgl->bgspeedratio = 2;
                 }
                 break;
@@ -15934,8 +16264,8 @@ void pausemenu()
 
 unsigned getFPS(void)
 {
-    static unsigned lasttick = 0, framerate = 0;
-    unsigned curtick = timer_gettick();
+    static u64 lasttick = 0, framerate = 0;
+    u64 curtick = timer_uticks();
     if(lasttick > curtick)
     {
         lasttick = curtick;
@@ -15944,12 +16274,13 @@ unsigned getFPS(void)
     lasttick = curtick;
     if(!framerate)
     {
-        return 0;
+        // if the frame took 0 ms, act like it was 1 ms instead
+        return 1000;
     }
 #ifdef PSP
     return ((10000000 / framerate) + 9) / 10;
 #else
-    return ((10000000 / framerate) + 9) / 10000;
+    return round(1.0e6 / framerate);
 #endif
 }
 
@@ -16120,21 +16451,22 @@ void updatestatus()
 //
 // Draw dot onto screen to indicate actual entity position,
 // with text readout of Base, X, Y, and Z coordinates directly below.
-void draw_position_entity(entity *entity, int offset_z, int color, s_drawmethod *drawmethod)
+void draw_properties_entity(entity *entity, int offset_z, int color, s_drawmethod *drawmethod)
 {
-    #define FONT                0
-    #define TEXT_MARGIN_Y       1
+    #define FONT_LABEL          1
+	#define FONT_VALUE          0
+	#define TEXT_MARGIN_Y       1
     #define OFFSET_LAYER       -2
 
-    // Position array keys
-    // and size constants.
+    // Array keys for the list of items 
+	// we want to display
     enum
     {
-        KEY_BASE,
-        KEY_X,
-        KEY_Y,
-        KEY_Z,
-        POS_ARRAY_SIZE
+		DRAW_PROPERTIES_KEY_NAME,
+		DRAW_PROPERTIES_KEY_BASE,
+		DRAW_PROPERTIES_KEY_POS,
+		DRAW_PROPERTIES_KEY_STATUS,
+		DRAW_PROPERTIES_ARRAY_SIZE	// Array size, so always last.
     };
 
     typedef struct
@@ -16147,54 +16479,87 @@ void draw_position_entity(entity *entity, int offset_z, int color, s_drawmethod 
     s_axis_plane_vertical_int   base_pos;       // Entity position with screen offsets applied.
     draw_coords                 box;            // On screen coords for display elements.
 
-    int pos_value[POS_ARRAY_SIZE];      // Entity position for display - truncated to int.
     int i;                              // Counter.
     int str_offset_x;                   // Calculated offset of text for centering.
-    int str_width_max;                  // largest string width.
+	int label_width_max;
+	int str_width_max;                  // largest string width.
     int str_height_max;                 // Largest string height.
     size_t str_size;                    // Memory size of string.
 
-    const char  *pos_label[POS_ARRAY_SIZE];  // Labels for string position values.
-    char        *pos_final[POS_ARRAY_SIZE];  // Final string to display position.
+	char		*output_label[DRAW_PROPERTIES_ARRAY_SIZE];
+	const char  *output_format[DRAW_PROPERTIES_ARRAY_SIZE]; // Format ("%d, %s ..").
+    char        *output_value[DRAW_PROPERTIES_ARRAY_SIZE];  // Final string to display position.
+	
+    // Let's build the format for information
+	// we want to display.
+	output_format[DRAW_PROPERTIES_KEY_NAME]		= "%s";
+	output_format[DRAW_PROPERTIES_KEY_BASE]		= "%d";
+	output_format[DRAW_PROPERTIES_KEY_POS]		= "%d, %d, %d";
+	output_format[DRAW_PROPERTIES_KEY_STATUS]	= "%d, %d";
+	
+	// Double pass method for unknown string size. 
+	//
+	// 1. Build the label.
+	//
+	// 2. Attempt to copy 0 chars to unallocated 
+	// buffer and record how many characters
+	// would be needed, plus 1 for the NULL terminator
+	// and record as a string_size.
+	// 
+	// 3. Allocate memory using the string size.
+	//
+	// 4. Copy formatted string to allocated buffer
+	// for real.
+	//
+	// Repeat for each line item we want to display.
+	//
+	// TO: Work this into a loop. Main obstacle is
+	// the number of format string inputs vary depending
+	// on type of property.
 
-    // Initialize box.
-    box.position.x = 0;
-    box.position.y = 0;
-    box.position.z = 0;
+	// Name
+	output_label[DRAW_PROPERTIES_KEY_NAME] = "Name: ";
+	output_value[DRAW_PROPERTIES_KEY_NAME] = NULL;
+	str_size = snprintf(output_value[DRAW_PROPERTIES_KEY_NAME], 0, output_format[DRAW_PROPERTIES_KEY_NAME], entity->model->name) + 1;
+	output_value[DRAW_PROPERTIES_KEY_NAME] = malloc(str_size);
+	snprintf(output_value[DRAW_PROPERTIES_KEY_NAME], str_size, output_format[DRAW_PROPERTIES_KEY_NAME], entity->model->name);
 
-    // Populate position labels.
-    pos_label[KEY_BASE]          = "B: %d";
-    pos_label[KEY_X]             = "X: %d";
-    pos_label[KEY_Y]             = "Y: %d";
-    pos_label[KEY_Z]             = "Z: %d";
+	// Base
+	output_label[DRAW_PROPERTIES_KEY_BASE] = "Base: ";
+	output_value[DRAW_PROPERTIES_KEY_BASE] = NULL;
+	str_size = snprintf(output_value[DRAW_PROPERTIES_KEY_BASE], 0, output_format[DRAW_PROPERTIES_KEY_BASE], (int)entity->base) + 1;
+	output_value[DRAW_PROPERTIES_KEY_BASE] = malloc(str_size);
+	snprintf(output_value[DRAW_PROPERTIES_KEY_BASE], str_size, output_format[DRAW_PROPERTIES_KEY_BASE], (int)entity->base);
 
-    // Populate position values - truncated to int.
-    pos_value[KEY_BASE]         = (int)entity->base;
-    pos_value[KEY_X]            = (int)entity->position.x;
-    pos_value[KEY_Y]            = (int)entity->position.y;
-    pos_value[KEY_Z]            = (int)entity->position.z;
+	// XYZ
+	output_label[DRAW_PROPERTIES_KEY_POS] = "X,Y,Z: ";
+	output_value[DRAW_PROPERTIES_KEY_POS] = NULL;
+	str_size = snprintf(output_value[DRAW_PROPERTIES_KEY_POS], 0, output_format[DRAW_PROPERTIES_KEY_POS], (int)entity->position.x, (int)entity->position.y, (int)entity->position.z) + 1;
+	output_value[DRAW_PROPERTIES_KEY_POS] = malloc(str_size);
+	snprintf(output_value[DRAW_PROPERTIES_KEY_POS], str_size, output_format[DRAW_PROPERTIES_KEY_POS], (int)entity->position.x, (int)entity->position.y, (int)entity->position.z);
 
-    // Allocate memory and create finished strings.
-    for(i = 0; i < POS_ARRAY_SIZE; i++)
-    {
-        // Get the total memory size we will need.
-        str_size  = sizeof(char) * (strlen(pos_label[i]) + 1);
-        str_size += sizeof(char) * (sizeof(pos_value[i]) + 1);
+	// HP & MP
+	output_label[DRAW_PROPERTIES_KEY_STATUS] = "HP, MP: ";
+	output_value[DRAW_PROPERTIES_KEY_STATUS] = NULL;
+	str_size = snprintf(output_value[DRAW_PROPERTIES_KEY_STATUS], 0, output_format[DRAW_PROPERTIES_KEY_STATUS], (int)entity->energy_state.health_current, (int)entity->energy_state.mp_current) + 1;
+	output_value[DRAW_PROPERTIES_KEY_STATUS] = malloc(str_size);
+	snprintf(output_value[DRAW_PROPERTIES_KEY_STATUS], str_size, output_format[DRAW_PROPERTIES_KEY_STATUS], (int)entity->energy_state.health_current, (int)entity->energy_state.mp_current);
 
-        // Allocate memory.
-        pos_final[i] = malloc(str_size);
 
-        // If allocation was successful, concatenate
-        // position label and position value.
-        if(pos_final[i])
-        {
-            sprintf(pos_final[i], pos_label[i], pos_value[i]);
-        }
-    }
+	// Get the largest string X and Y space. For X find the largest
+	// label and value, then add them. For Y, just get height of 
+	// largest font.
+    label_width_max = font_string_width_max(output_label, DRAW_PROPERTIES_ARRAY_SIZE, FONT_LABEL);
+	str_width_max = label_width_max + font_string_width_max(output_value, DRAW_PROPERTIES_ARRAY_SIZE, FONT_VALUE);
 
-    // Get the largest string X and Y space.
-    str_width_max   = font_string_width_max(*pos_final, FONT);
-    str_height_max  = fontheight(FONT);
+	if (fontheight(FONT_LABEL) > fontheight(FONT_VALUE))
+	{
+		str_height_max = fontheight(FONT_LABEL);
+	}
+	else
+	{
+		str_height_max = fontheight(FONT_VALUE);
+	}
 
     // Get our base offsets from screen vs. location.
     screen_offset.x = screenx - ((entity->modeldata.noquake & NO_QUAKEN) ? 0 : gfx_x_offset);
@@ -16221,149 +16586,25 @@ void draw_position_entity(entity *entity, int offset_z, int color, s_drawmethod 
     // instead of just adjusting Z.
     spriteq_add_dot(base_pos.x, base_pos.y, box.position.z+1, color, drawmethod);
 
-    // Print each position text.
-    for(i = 0; i < POS_ARRAY_SIZE; i++)
+    // Print each item text.
+    for(i = 0; i < DRAW_PROPERTIES_ARRAY_SIZE; i++)
     {
-        // If the position string exists then
+        // If the item string exists then
         // we can find a position, print it to
         // the screen, and free up allocated memory.
-        if(pos_final[i])
+        if(output_value[i])
         {
            // Add font height and margin to Y position.
             base_pos.y += (str_height_max + TEXT_MARGIN_Y);
 
-            // Print position text.
-            font_printf(box.position.x, base_pos.y, FONT, OFFSET_LAYER, pos_final[i]);
+            // Print label to the screen. The value X
+			// position adds maximum label width, plus
+			// 25% the width a single value character.
+            font_printf(box.position.x, base_pos.y, FONT_LABEL, OFFSET_LAYER, output_label[i]);
+			font_printf(box.position.x + label_width_max + (fontmonowidth(FONT_VALUE) * 0.25), base_pos.y, FONT_VALUE, OFFSET_LAYER, output_value[i]);
 
-            // Release memory allocated for the string.
-            free(pos_final[i]);
-        }
-    }
-
-    return;
-
-    // Remove local constants.
-    #undef FONT
-    #undef TEXT_MARGIN_Y
-    #undef OFFSET_LAYER
-}
-
-// White Dragon
-// 2016-11-28
-//
-// Draw entity features
-void draw_features_entity(entity *entity, int offset_z, int color, s_drawmethod *drawmethod)
-{
-    #define FONT                0
-    #define TEXT_MARGIN_Y       1
-    #define OFFSET_LAYER       -2
-
-    // Features array keys
-    // and size constants.
-    enum
-    {
-        KEY_MODELNAME,
-        CHAR_ARRAY_SIZE
-    };
-
-    typedef struct
-    {
-        s_axis_principal_int        position;
-        s_axis_plane_vertical_int   size;
-    } draw_coords;
-
-    s_axis_plane_vertical_int   screen_offset;  // Base location calculated from screen offsets.
-    s_axis_plane_vertical_int   base_pos;       // Entity position with screen offsets applied.
-    draw_coords                 box;            // On screen coords for display elements.
-
-    char *char_value[CHAR_ARRAY_SIZE];  // Entity features for display
-    int i;                              // Counter.
-    int str_offset_x;                   // Calculated offset of text for centering.
-    int str_width_max;                  // largest string width.
-    int str_height_max;                 // Largest string height.
-    size_t str_size;                    // Memory size of string.
-
-    const char  *char_label[CHAR_ARRAY_SIZE];  // Labels for string features
-    char        *char_final[CHAR_ARRAY_SIZE];  // Final string to display.
-
-    // Initialize box.
-    box.position.x = 0;
-    box.position.y = 0;
-    box.position.z = 0;
-
-    // Populate position labels.
-    char_label[KEY_MODELNAME]    = "%s";
-
-    // Populate position values - truncated to int.
-    char_value[KEY_MODELNAME] = malloc( sizeof(char) * (strlen(entity->model->name)+1) );
-    memcpy( char_value[KEY_MODELNAME], entity->model->name, (strlen(entity->model->name)+1) );
-
-    // Allocate memory and create finished strings.
-    for(i = 0; i < CHAR_ARRAY_SIZE; i++)
-    {
-        // Get the total memory size we will need.
-        str_size  = sizeof(char) * (strlen(char_label[i]) + 1);
-        str_size += sizeof(char) * (strlen(char_value[i]) + 1);
-
-        // Allocate memory.
-        char_final[i] = malloc(str_size);
-
-        // If allocation was successful, concatenate
-        // position label and position value.
-        if(char_final[i])
-        {
-            sprintf(char_final[i], char_label[i], char_value[i]);
-        }
-
-        free(char_value[i]);
-    }
-
-    // Get the largest string X and Y space.
-    str_width_max   = font_string_width_max(*char_final, FONT);
-    str_height_max  = fontheight(FONT);
-
-    // Get our base offsets from screen vs. location.
-    screen_offset.x = screenx - ((entity->modeldata.noquake & NO_QUAKEN) ? 0 : gfx_x_offset);
-    screen_offset.y = screeny - ((entity->modeldata.noquake & NO_QUAKEN) ? 0 : gfx_y_offset);
-
-    // Get entity position with screen offsets.
-    base_pos.x = entity->position.x - screen_offset.x;
-    base_pos.y = (entity->position.z - offset_z) - entity->position.y - screen_offset.y;
-
-    // Get a value of half the text width.
-    // We can use this to center our text
-    // on the entity.
-    str_offset_x = (str_width_max - font_string_width(FONT, "0")) / 2;
-
-    // Apply text offset.
-    box.position.x = base_pos.x - str_offset_x;
-
-    box.position.y = base_pos.y;
-    box.position.z = entity->position.z + offset_z;
-
-    // Draw position dot.
-    // The +1 to Z is a quick fix - offset_z
-    // distorts the dot's vertical position
-    // instead of just adjusting Z.
-    if (!savedata.debug_position) spriteq_add_dot(base_pos.x, base_pos.y, box.position.z+1, color, drawmethod);
-
-    // Print each feature text.
-    if (savedata.debug_position) base_pos.y += (str_height_max + TEXT_MARGIN_Y)*(3+1);
-    for(i = 0; i < CHAR_ARRAY_SIZE; i++)
-    {
-        // If the position string exists then
-        // we can find a position, print it to
-        // the screen, and free up allocated memory.
-        if(char_final[i])
-        {
-           // Add font height and margin to Y position.
-            base_pos.y += (str_height_max + TEXT_MARGIN_Y);
-
-            // Print position text.
-            font_printf(box.position.x, base_pos.y, FONT, OFFSET_LAYER, char_final[i]);
-
-            // Release memory allocated for the string.
-            free(char_final[i]);
+            // Release memory allocated for the value strings.
+            free(output_value[i]);
         }
     }
 
@@ -16428,7 +16669,6 @@ void draw_visual_debug()
 {
     #define LOCAL_COLOR_BLUE        _makecolour(0, 0, 255)
     #define LOCAL_COLOR_GREEN       _makecolour(0, 255, 0)
-    #define LOCAL_COLOR_ORANGE      _makecolour(255, 100, 0)
     #define LOCAL_COLOR_MAGENTA     _makecolour(255, 0, 255)
     #define LOCAL_COLOR_WHITE       _makecolour(255, 255, 255)
 
@@ -16437,11 +16677,10 @@ void draw_visual_debug()
     s_hitbox            *coords;
     s_collision_attack  *collision_attack;
     s_collision_body    *collision_body;
-    s_collision_entity  *collision_entity;
     s_drawmethod        drawmethod = plainmethod;
     entity              *entity;
 
-    drawmethod.alpha = 1;
+    drawmethod.alpha = BLEND_MODE_ALPHA;
 
     for(i=0; i<ent_max; i++)
     {
@@ -16459,26 +16698,20 @@ void draw_visual_debug()
             continue;
         }
 
-        // Show offset and position.
-        if(savedata.debug_position)
+        // Basic properties (Name, position, HP, etc.).
+        if(savedata.debuginfo & DEBUG_DISPLAY_PROPERTIES)
         {
-            draw_position_entity(entity, 0, LOCAL_COLOR_WHITE, NULL);
+            draw_properties_entity(entity, 0, LOCAL_COLOR_WHITE, NULL);
         }
 
-        // Show features.
-        if(savedata.debug_features)
-        {
-            draw_features_entity(entity, 0, LOCAL_COLOR_WHITE, NULL);
-        }
-
-        // Collision body debug requested?
-        if(savedata.debug_collision_range)
+        // Range debug requested?
+        if(savedata.debuginfo & DEBUG_DISPLAY_RANGE)
         {
             draw_box_on_entity(entity, entity->animation->range.x.min, entity->animation->range.y.min, entity->position.z+1, entity->animation->range.x.max, entity->animation->range.y.max, -1, LOCAL_COLOR_GREEN, &drawmethod);
         }
 
         // Collision body debug requested?
-        if(savedata.debug_collision_body)
+        if(savedata.debuginfo & DEBUG_DISPLAY_COLLISION_BODY)
         {
             // Animation has collision?
             if(entity->animation->collision_body)
@@ -16503,34 +16736,8 @@ void draw_visual_debug()
             }
         }
 
-        // Collision entity debug requested?
-        if(savedata.debug_collision_entity)
-        {
-            // Animation has collision?
-            if(entity->animation->collision_entity)
-            {
-                // Frame has collision?
-                if(entity->animation->collision_entity[entity->animpos])
-                {
-                    // Loop instances of collision.
-                    for(instance = 0; instance < max_collisons; instance++)
-                    {
-                        // Get collision instance pointer.
-                        collision_entity = entity->animation->collision_entity[entity->animpos]->instance[instance];
-
-                        // Valid collision instance pointer found?
-                        if(collision_entity)
-                        {
-                            coords = collision_entity->coords;
-                            draw_box_on_entity(entity, coords->x, coords->y, entity->position.z+1, coords->width, coords->height, 2, LOCAL_COLOR_ORANGE, &drawmethod);
-                        }
-                    }
-                }
-            }
-        }
-
         // Collision attack requested?
-        if(savedata.debug_collision_attack)
+        if(savedata.debuginfo & DEBUG_DISPLAY_COLLISION_ATTACK)
         {
             // Animation has collision?
             if(entity->animation->collision_attack)
@@ -16558,7 +16765,6 @@ void draw_visual_debug()
 
     #undef LOCAL_COLOR_BLUE
     #undef LOCAL_COLOR_GREEN
-    #undef LOCAL_COLOR_ORANGE
     #undef LOCAL_COLOR_MAGENTA
     #undef LOCAL_COLOR_WHITE
 }
@@ -16599,7 +16805,7 @@ void predrawstatus()
                 font_printf(videomodes.shiftpos[i] + pscore[i][4], savedata.windowpos + pscore[i][5], pscore[i][6], 0, (scoreformat ? "%09lu" : "%lu"), tmp);
             }
 
-            if(player[i].ent->energy_status.health_current <= 0)
+            if(player[i].ent->energy_state.health_current <= 0)
             {
                 icon = player[i].ent->modeldata.icon.die;
             }
@@ -16639,15 +16845,15 @@ void predrawstatus()
             if(player[i].ent->modeldata.mp)
             {
                 drawmethod.table = player[i].ent->modeldata.icon.usemap ? player[i].ent->colourmap : NULL;
-                if(player[i].ent->modeldata.icon.mphigh > 0 && (player[i].ent->energy_status.mp_old >= (player[i].ent->modeldata.mp * .66)))
+                if(player[i].ent->modeldata.icon.mphigh > 0 && (player[i].ent->energy_state.mp_old >= (player[i].ent->modeldata.mp * .66)))
                 {
                     spriteq_add_sprite(videomodes.shiftpos[i] + mpicon[i][0], savedata.windowpos + mpicon[i][1], 10000, player[i].ent->modeldata.icon.mphigh, &drawmethod, 0);
                 }
-                else if(player[i].ent->modeldata.icon.mpmed > 0 && (player[i].ent->energy_status.mp_old >= (player[i].ent->modeldata.mp * .33) && player[i].ent->energy_status.mp_old < (player[i].ent->modeldata.mp * .66)))
+                else if(player[i].ent->modeldata.icon.mpmed > 0 && (player[i].ent->energy_state.mp_old >= (player[i].ent->modeldata.mp * .33) && player[i].ent->energy_state.mp_old < (player[i].ent->modeldata.mp * .66)))
                 {
                     spriteq_add_sprite(videomodes.shiftpos[i] + mpicon[i][0], savedata.windowpos + mpicon[i][1], 10000, player[i].ent->modeldata.icon.mpmed, &drawmethod, 0);
                 }
-                else if(player[i].ent->modeldata.icon.mplow > 0 && (player[i].ent->energy_status.mp_old >= 0 && player[i].ent->energy_status.mp_old < (player[i].ent->modeldata.mp * .33)))
+                else if(player[i].ent->modeldata.icon.mplow > 0 && (player[i].ent->energy_state.mp_old >= 0 && player[i].ent->energy_state.mp_old < (player[i].ent->modeldata.mp * .33)))
                 {
                     spriteq_add_sprite(videomodes.shiftpos[i] + mpicon[i][0], savedata.windowpos + mpicon[i][1], 10000, player[i].ent->modeldata.icon.mplow, &drawmethod, 0);
                 }
@@ -16682,7 +16888,7 @@ void predrawstatus()
             {
                 // Displays life unless overridden by flag
                 font_printf(videomodes.shiftpos[i] + ename[i][0], savedata.windowpos + ename[i][1], ename[i][2], 0, player[i].ent->opponent->name);
-                if(player[i].ent->opponent->energy_status.health_current <= 0)
+                if(player[i].ent->opponent->energy_state.health_current <= 0)
                 {
                     icon = player[i].ent->opponent->modeldata.icon.die;
                 }
@@ -16757,14 +16963,10 @@ void predrawstatus()
         }
     }// end of for
 
-    if(savedata.debug_position
-       || savedata.debug_features
-       || savedata.debug_collision_attack
-       || savedata.debug_collision_body
-       || savedata.debug_collision_entity
-       || savedata.debug_collision_range)
-    {
-        // Collision boxes
+	// If any of the debug flags are enabled, let's
+	// output debug data to end user.
+    if(savedata.debuginfo)
+    {		
         draw_visual_debug();
     }
 
@@ -16804,7 +17006,7 @@ void predrawstatus()
     }
 
     // Performance info.
-    if(savedata.debuginfo)
+    if(savedata.debuginfo & DEBUG_DISPLAY_PERFORMANCE)
     {
         spriteq_add_box(0, videomodes.dOffset - 12, videomodes.hRes, videomodes.dOffset + 12, LAYER_Z_LIMIT_BOX_MAX, 0, NULL);
         font_printf(2, videomodes.dOffset - 10, 0, LAYER_Z_LIMIT_MAX, Tr("FPS: %03d"), getFPS());
@@ -16827,7 +17029,7 @@ void drawenemystatus(entity *ent)
 
     if(ent->modeldata.icon.position.x > -1000 &&  ent->modeldata.icon.position.y > -1000)
     {
-        if(ent->energy_status.health_current <= 0)
+        if(ent->energy_state.health_current <= 0)
         {
             icon = ent->modeldata.icon.die;
         }
@@ -16854,7 +17056,7 @@ void drawenemystatus(entity *ent)
 
     if(ent->modeldata.health && ent->modeldata.hpx > -1000 && ent->modeldata.hpy > -1000)
     {
-        bar(ent->modeldata.hpx, ent->modeldata.hpy, ent->energy_status.health_old, ent->modeldata.health, &(ent->modeldata.hpbarstatus));
+        bar(ent->modeldata.hpx, ent->modeldata.hpy, ent->energy_state.health_old, ent->modeldata.health, &(ent->modeldata.hpbarstatus));
     }
 }
 
@@ -16868,15 +17070,15 @@ void drawstatus()
         if(player[i].ent)
         {
             // Health bars
-            bar(videomodes.shiftpos[i] + plife[i][0], savedata.windowpos + plife[i][1], player[i].ent->energy_status.health_old, player[i].ent->modeldata.health, &lbarstatus);
+            bar(videomodes.shiftpos[i] + plife[i][0], savedata.windowpos + plife[i][1], player[i].ent->energy_state.health_old, player[i].ent->modeldata.health, &lbarstatus);
             if(player[i].ent->opponent && !player[i].ent->opponent->modeldata.nolife && player[i].ent->opponent->modeldata.health)
             {
-                bar(videomodes.shiftpos[i] + elife[i][0], savedata.windowpos + elife[i][1], player[i].ent->opponent->energy_status.health_old, player[i].ent->opponent->modeldata.health, &olbarstatus);    // Tied in with the nolife flag
+                bar(videomodes.shiftpos[i] + elife[i][0], savedata.windowpos + elife[i][1], player[i].ent->opponent->energy_state.health_old, player[i].ent->opponent->modeldata.health, &olbarstatus);    // Tied in with the nolife flag
             }
             // Draw mpbar
             if(player[i].ent->modeldata.mp)
             {
-                bar(videomodes.shiftpos[i] + pmp[i][0], savedata.windowpos + pmp[i][1], player[i].ent->energy_status.mp_old, player[i].ent->modeldata.mp, &mpbarstatus);
+                bar(videomodes.shiftpos[i] + pmp[i][0], savedata.windowpos + pmp[i][1], player[i].ent->energy_state.mp_old, player[i].ent->modeldata.mp, &mpbarstatus);
             }
         }
     }
@@ -17039,6 +17241,13 @@ void free_ent(entity *e)
         e->item_properties = NULL;
     }
 
+	// Recursive damage (damage over time).
+	if (e->recursive_damage)
+	{
+		free_recursive_list(e->recursive_damage);
+		e->recursive_damage = NULL;
+	}
+
     if(e->waypoints)
     {
         free(e->waypoints);
@@ -17054,6 +17263,13 @@ void free_ent(entity *e)
         free(e->offense_factors);
         e->offense_factors = NULL;
     }
+
+	if (e->drawmethod)
+	{
+		free(e->drawmethod);
+		e->drawmethod = NULL;
+	}
+
     if(e->varlist)
     {
         // Although free_ent will be only called once when the engine is shutting down,
@@ -17146,39 +17362,65 @@ int is_walking(int iAni)
     return 0;
 }
 
-//UT: merged DC's common walk/idle functions
-static int common_anim_series(entity *ent, int arraya[], int maxa, int forcemode, int defaulta)
+// UT: merged DC's common walk/idle functions
+//
+// Caskey, Damon V.
+// 2019-02-09
+//
+// Rewritten for greater readability.
+static bool common_anim_series(entity *ent, e_animations *alterates, int max_alternates, int force_mode, e_animations default_animation)
 {
-    int i, b, e;                                                                    //Loop counter.
-    int iAni;                                                                       //Animation.
+	int i;						// Loop cursor.
+	int loop_min;							
+	int loop_max;							
+	e_animations animation_id;	// Animation to apply.
+	
+	// If we have a forced mode, we'll use it to constrict
+	// loop options to just the forced mode.
+	loop_min = force_mode ? force_mode - 1 : 0;
+	loop_max = force_mode ? force_mode : max_alternates;
 
-    b = forcemode ? forcemode - 1 : 0;
-    e = forcemode ? forcemode : maxa;
-
-    for (i = b; i < e; i++)															//Loop through all relevant animations.
+	// Loop through available types of series animations (max idles/walks/etc.).
+    for (i = loop_min; i < loop_max; i++)
     {
-        iAni = arraya[i];															//Get current animation.
+		// Get animation from array of alternates.
+		animation_id = alterates[i];
 
-        if (validanim(ent, iAni) && iAni != defaulta)                               //Valid and not Default animation??
-        {
-            if (forcemode || normal_find_target(iAni, 0))                           //Opponent in range of current animation?
-            {
-                ent->ducking = DUCK_INACTIVE;
-                ent_set_anim(ent, iAni, 0);                                         //Set animation.
-                if (is_walking(iAni)) ent->walking = 1; // set walking prop
+		// If we don't have the selected animation, just
+		// get out of this loop iteration.
+		if (!validanim(ent, animation_id))
+		{
+			continue;
+		}
 
-                return 1;                                                           //Return 1 and exit.
-            }
-        }
+		// Can't be the default animation.
+		if (animation_id == default_animation)
+		{
+			continue;
+		}
+
+		// If there's a target in range of this alternate animation, or 
+		// we're forced to use it, switch animations.
+		if (force_mode || normal_find_target(animation_id, 0))
+		{
+			ent->ducking = DUCK_NONE;
+			ent_set_anim(ent, animation_id, 0);
+			if (is_walking(animation_id)) ent->walking = 1;
+
+			// Return true.
+			return 1;
+		}
     }
 
-    if (validanim(ent, defaulta))
+	// No alternates were set. Use default if we have it.
+    if (validanim(ent, default_animation))
     {
-        ent->ducking = DUCK_INACTIVE;
-        ent_set_anim(ent, defaulta, 0);                                             //No alternates were set. Set default..
-        if (is_walking(defaulta)) ent->walking = 1; // set walking prop
+		ent->ducking = DUCK_NONE;
+		ent_set_anim(ent, default_animation, 0);
+		if (is_walking(default_animation)) ent->walking = 1;
 
-        return 1;                                                                   //Return 1 and exit.
+		// Return true.
+		return 1;
     }
 
     return 0;
@@ -17197,7 +17439,7 @@ int common_idle_anim(entity *ent)
 
     self = ent;
 
-    self->ducking = DUCK_INACTIVE;
+    self->ducking = DUCK_NONE;
     if(self->idling)
     {
         self->idling |= IDLING_ACTIVE;
@@ -17208,7 +17450,7 @@ int common_idle_anim(entity *ent)
         ent->velocity.x = ent->velocity.z = 0;    //Stop movement.
     }
 
-    if(validanim(ent, ANI_FAINT) && ent->energy_status.health_current <= ent->modeldata.health / 4)           //ANI_FAINT and health at/below 25%?
+    if(validanim(ent, ANI_FAINT) && ent->energy_state.health_current <= ent->modeldata.health / 4)           //ANI_FAINT and health at/below 25%?
     {
         ent_set_anim(ent, ANI_FAINT, 0);                                                //Set ANI_FAINT.
         goto found;                                                                      //Return 1 and exit.
@@ -17218,7 +17460,7 @@ int common_idle_anim(entity *ent)
         ent_set_anim(ent, ANI_SLEEP, 0);                                                //Set sleep anim.
         goto found;                                                                     //Return 1 and exit.
     }
-    else if(validanim(ent, ANI_EDGE) && ent->edge && (ent->idling & IDLING_ACTIVE) && ent->ducking == DUCK_INACTIVE)
+    else if(validanim(ent, ANI_EDGE) && ent->edge && (ent->idling & IDLING_ACTIVE) && ent->ducking == DUCK_NONE)
     {
         if ( (ent->edge & EDGE_RIGHT) && (ent->edge & EDGE_LEFT) )
         {
@@ -17333,8 +17575,16 @@ void ent_default_init(entity *e)
     }
     else if(selectScreen && validanim(e, ANI_SELECT))
     {
-        ent_set_anim(e, ANI_SELECT, 0);
-    }
+		// Play transition if we have one. Default Select otherwise.
+		if (validanim(e, ANI_SELECTIN))
+		{
+			ent_set_anim(e, ANI_SELECTIN, 0);
+		}
+		else
+		{	
+			ent_set_anim(e, ANI_SELECT, 0);
+		}
+	}
     //else set_idle(e);
 
     if(!level)
@@ -17386,7 +17636,7 @@ void ent_default_init(entity *e)
         if(_time && e->modeldata.makeinv)
         {
             // Spawn invincible code
-            e->invincible = 1;
+            e->invincible |= INVINCIBLE_INTANGIBLE;
             e->blink = (e->modeldata.makeinv > 0);
             e->invinctime = _time + ABS(e->modeldata.makeinv);
             e->arrowon = 1;    // Display the image above the player
@@ -17421,7 +17671,7 @@ void ent_default_init(entity *e)
         // define new subtypes
         else if(e->modeldata.subtype == SUBTYPE_ARROW)
         {
-            e->energy_status.health_current = 1;
+            e->energy_state.health_current = 1;
             if(!e->modeldata.speed && !e->modeldata.nomove)
             {
                 e->modeldata.speed = 2;    // Set default speed to 2 for arrows
@@ -17501,7 +17751,7 @@ void ent_default_init(entity *e)
     case TYPE_OBSTACLE:
         e->nograb = 1;
         e->nograb_default = e->nograb;
-        if(e->energy_status.health_current <= 0)
+        if(e->energy_state.health_current <= 0)
         {
             e->dead = 1;    // so it won't get hit
         }
@@ -17519,7 +17769,7 @@ void ent_default_init(entity *e)
         e->think = text_think;
         break;
     case TYPE_SHOT:
-        e->energy_status.health_current = 1;
+        e->energy_state.health_current = 1;
         e->nograb = 1;
         e->nograb_default = e->nograb;
         e->think = common_think;
@@ -17793,7 +18043,7 @@ bool check_jumpframe(entity *ent, unsigned int frame)
         {
             effect->spawntype = SPAWN_TYPE_DUST_JUMP;
             effect->base = ent->position.y;
-            effect->autokill = 2;
+            effect->autokill |= AUTOKILL_ANIMATION_COMPLETE;
             execute_onspawn_script(effect);
         }
     }
@@ -17908,10 +18158,8 @@ void update_frame(entity *ent, unsigned int f)
         {
             self = self->subentity;
             attack = emptyattack;
-            attack.dropv.y = default_model_dropv.y;
-            attack.dropv.x = default_model_dropv.x;
-            attack.dropv.z = default_model_dropv.z;
-            attack.attack_force = self->energy_status.health_current;
+            attack.dropv = default_model_dropv;
+            attack.attack_force = self->energy_state.health_current;
             attack.attack_type = max_attack_types - 1;
             if(self->takedamage)
             {
@@ -18047,7 +18295,7 @@ void ent_set_anim(entity *ent, int aninum, int resetable)
         {
             animpos = 0;
         }
-        ent->prevanimnum = ent->animnum;
+        ent->animnum_previous = ent->animnum;
         ent->animnum = aninum;
         ent->animation = ani;
         ent->animpos = animpos;
@@ -18055,12 +18303,12 @@ void ent_set_anim(entity *ent, int aninum, int resetable)
     }
     else
     {
-        ent->prevanimnum = ent->animnum;
+        ent->animnum_previous = ent->animnum;
         ent->animnum = aninum;    // Stored for nocost usage
         ent->animation = ani;
         ent->animation->animhits = 0;
 
-        ent->animating = 1;
+        ent->animating = ANIMATING_FORWARD;
         ent->lasthit = ent->grabbing;
         ent->altbase = 0;
         ent->walking = 0;
@@ -18186,13 +18434,13 @@ void ent_copy_uninit(entity *ent, s_model *oldmodel)
     if(!ent->modeldata.paingrab)
     	ent->modeldata.paingrab             = oldmodel->paingrab;*/
 
-    if(ent->energy_status.health_current > ent->modeldata.health)
+    if(ent->energy_state.health_current > ent->modeldata.health)
     {
-        ent->energy_status.health_current = ent->modeldata.health;
+        ent->energy_state.health_current = ent->modeldata.health;
     }
-    if(ent->energy_status.mp_current > ent->modeldata.mp)
+    if(ent->energy_state.mp_current > ent->modeldata.mp)
     {
-        ent->energy_status.mp_current = ent->modeldata.mp;
+        ent->energy_state.mp_current = ent->modeldata.mp;
     }
 }
 
@@ -18229,7 +18477,7 @@ void ent_set_model(entity *ent, char *modelname, int syncAnim)
     }
     else
     {
-        ent->attacking = ATTACKING_INACTIVE;
+        ent->attacking = ATTACKING_NONE;
 
         if((!selectScreen && !_time) || !(ent->modeldata.type & TYPE_PLAYER))
         {
@@ -18261,7 +18509,15 @@ void ent_set_model(entity *ent, char *modelname, int syncAnim)
         }
         else if(selectScreen && validanim(ent, ANI_SELECT))
         {
-            ent_set_anim(ent, ANI_SELECT, 0);
+			// Play transition if we have one. Default Select otherwise.
+			if (validanim(ent, ANI_SELECTIN))
+			{
+				ent_set_anim(ent, ANI_SELECTIN, 0);
+			}
+			else
+			{
+				ent_set_anim(ent, ANI_SELECT, 0);
+			}
         }
         else
         {
@@ -18270,6 +18526,18 @@ void ent_set_model(entity *ent, char *modelname, int syncAnim)
     }
 }
 
+s_drawmethod *allocate_drawmethod()
+{
+	s_drawmethod *result;
+
+	// Allocate memory for new drawmethod structure and get pointer.
+	result = malloc(sizeof(*result));
+
+	// Copy default values into new drawmethod.
+	memcpy(result, &plainmethod, sizeof(*result));
+
+	return result;
+}
 
 entity *spawn(float x, float z, float a, e_direction direction, char *name, int index, s_model *model)
 {
@@ -18334,8 +18602,11 @@ entity *spawn(float x, float z, float a, e_direction direction, char *name, int 
 
             scripts = e->scripts;
             memset(e, 0, sizeof(*e));
-            e->drawmethod = plainmethod;
-            e->drawmethod.flag = 0;
+            
+			// e->drawmethod = plainmethod;
+			e->drawmethod = allocate_drawmethod();
+
+            e->drawmethod->flag = 0;
 
             // add to list and count current entities
             e->exists = 1;
@@ -18356,8 +18627,8 @@ entity *spawn(float x, float z, float a, e_direction direction, char *name, int 
             }
             e->timestamp = _time; // log time so update function will ignore it if it is new
 
-            e->energy_status.health_current = e->modeldata.health;
-            e->energy_status.mp_current = e->modeldata.mp;
+            e->energy_state.health_current = e->modeldata.health;
+            e->energy_state.mp_current = e->modeldata.mp;
             e->knockdowncount = e->modeldata.knockdowncount;
             e->position.x = x;
             e->position.z = z;
@@ -18439,7 +18710,7 @@ void kill_entity(entity *victim)
 
     ent_unlink(victim);
     victim->weapent = NULL;
-    victim->energy_status.health_current = 0;
+    victim->energy_state.health_current = 0;
     victim->exists = 0;
     ent_count--;
 
@@ -18455,9 +18726,7 @@ void kill_entity(entity *victim)
     {
         attack = emptyattack;
         attack.attack_type = max_attack_types - 1;
-        attack.dropv.y = default_model_dropv.y;
-        attack.dropv.x = default_model_dropv.x;
-        attack.dropv.z = default_model_dropv.z;
+        attack.dropv = default_model_dropv;
     }
     // kill minions
     if(victim->modeldata.summonkill == 1 && victim->subentity)
@@ -18465,7 +18734,7 @@ void kill_entity(entity *victim)
         // kill only summoned one
         victim->subentity->parent = NULL;
         self = victim->subentity;
-        attack.attack_force = self->energy_status.health_current;
+        attack.attack_force = self->energy_state.health_current;
         if(self->takedamage && !level_completed)
         {
             self->takedamage(self, &attack, 0);
@@ -18504,7 +18773,7 @@ void kill_entity(entity *victim)
                 self->parent = NULL;
                 if(victim->modeldata.summonkill == 2)
                 {
-                    attack.attack_force = self->energy_status.health_current;
+                    attack.attack_force = self->energy_state.health_current;
                     if(self->takedamage && !level_completed)
                     {
                         self->takedamage(self, &attack, 0);
@@ -18804,6 +19073,8 @@ int checkhit(entity *attacker, entity *target)
     lasthit.attack      = attack;
     lasthit.body        = detect;
     lasthit.position.y  = lasthit.position.z - medy;
+	lasthit.target = target;
+	lasthit.attacker = attacker;
     lasthit.confirm     = 1;
 
     return 1;
@@ -19454,6 +19725,40 @@ void set_opponent(entity *ent, entity *other)
 }
 
 // Caskey, Damon V.
+// 2018-12-31
+// 
+// Initialize appropriate block animation and flags. Called when 
+// entity blocks actively (blocking before attack hits). Used 
+// by all player controlled entities or AI controlled entities 
+// with nopassiveblock enabled. 
+void do_active_block(entity *ent)
+{
+	// Run blocking action.
+	ent->takeaction = common_block;
+
+	// Stop movement.
+	ent->velocity.x = 0;
+	ent->velocity.z = 0;
+
+	// Set flags.
+	set_blocking(self);
+
+	// End combo.
+	self->combostep[0] = 0;
+
+	// If we have a block tranisiton animation, use it. Otherwise
+	// go right to block.
+	if (validanim(self, ANI_BLOCKSTART))
+	{
+		ent_set_anim(self, ANI_BLOCKSTART, 0);
+	}
+	else
+	{
+		ent_set_anim(self, ANI_BLOCK, 0);
+	}
+}
+
+// Caskey, Damon V.
 // 2018-09-16
 //
 // Find out if attack can be blocked by entity.
@@ -19463,57 +19768,57 @@ void set_opponent(entity *ent, entity *other)
 // so on. It does not handle rules for AI blocking.
 int check_blocking_eligible(entity *ent, entity *other, s_collision_attack *attack)
 {
-    // If guardpoints are set, then find out if they've been depleted.
-    if(ent->modeldata.guardpoints.max)
-    {
-        if(ent->modeldata.guardpoints.current <= 0)
-        {
-            return 0;
-        }
-    }
+	// If guardpoints are set, then find out if they've been depleted.
+	if (ent->modeldata.guardpoints.max)
+	{
+		if (ent->modeldata.guardpoints.current <= 0)
+		{
+			return 0;
+		}
+	}
 
-    // Attack block breaking exceeds block power?
-    if(ent->defense[attack->attack_type].blockpower)
-    {
-        if(attack->no_block >= ent->defense[attack->attack_type].blockpower)
-        {
-            return 0;
-        }
-    }
+	// Attack block breaking exceeds block power?
+	if (ent->defense[attack->attack_type].blockpower)
+	{
+		if (attack->no_block >= ent->defense[attack->attack_type].blockpower)
+		{
+			return 0;
+		}
+	}
 
-    // Attack from behind? Can't block that if
-    // we don't have blockback flag enabled.
-    if(ent->direction == other->direction)
-    {
-        if(!ent->modeldata.blockback)
-        {
-            return 0;
-        }
-    }
+	// Attack from behind? Can't block that if
+	// we don't have blockback flag enabled.
+	if (ent->direction == other->direction)
+	{
+		if (!ent->modeldata.blockback)
+		{
+			return 0;
+		}
+	}
 
-    // if there is a blocking threshold? Verify it vs. attack force.
-    if(ent->modeldata.thold)
-    {
-        // Threshold value vs. attack.
-        if(attack->attack_force >= ent->modeldata.thold)
-        {
-            return 0;
-        }
-    }
+	// Is there a blocking threshold? Verify it vs. attack force.
+	if (ent->modeldata.thold)
+	{
+		// Threshold value vs. attack.
+		if (attack->attack_force >= ent->modeldata.thold)
+		{
+			return 0;
+		}
+	}
 
-    // Is there a blocking threshhold for the attack type?
-    // Verify it vs. attack force.
-    if(ent->defense[attack->attack_type].blockthreshold)
-    {
-        if(ent->defense[attack->attack_type].blockthreshold > attack->attack_force)
-        {
-            return 0;
-        }
-    }
+	// Is there a blocking threshhold for the attack type?
+	// Verify it vs. attack force.
+	if (ent->defense[attack->attack_type].blockthreshold)
+	{
+		if (ent->defense[attack->attack_type].blockthreshold > attack->attack_force)
+		{
+			return 0;
+		}
+	}
 
-    // If we made it through all that, then
-    // attack can be blocked. Return true.
-    return 1;
+	// If we made it through all that, then
+	// attack can be blocked. Return true.
+	return 1;
 }
 
 // Caskey, Damon V.
@@ -19524,154 +19829,144 @@ int check_blocking_eligible(entity *ent, entity *other, s_collision_attack *atta
 // blocking in general.
 int check_blocking_rules(entity *ent)
 {
+	// If already blocking we can
+	// forget the rest and return
+	// true right away.
+	if (ent->blocking)
+	{
+		return 1;
+	}
 
-    // If already blocking we can
-    // forget the rest and return
-    // true right away.
-    if(ent->blocking)
-    {
-        return 1;
-    }
+	// No blocking animation?
+	if (!validanim(ent, ANI_BLOCK))
+	{
+		return 0;
+	}
 
-    // No blocking animation?
-    if(!validanim(ent, ANI_BLOCK))
-    {
-        return 0;
-    }
+	// Have to be idle.
+	if (!ent->idling)
+	{
+		return 0;
+	}
 
-    // Have to be idle.
-    if(!ent->idling)
-    {
-        return 0;
-    }
+	// AI can't be attacking.
+	if (ent->attacking == ATTACKING_ACTIVE)
+	{
+		return 0;
+	}
 
-    // AI can't be attacking.
-    if(ent->attacking == ATTACKING_ACTIVE)
-    {
-        return 0;
-    }
+	// Grappling?
+	if (ent->link)
+	{
+		return 0;
+	}
 
-    // Grappling?
-    if(ent->link)
-    {
-        return 0;
-    }
+	//  Airborne?
+	if (inair(ent))
+	{
+		return 0;
+	}
 
-    //  Airborne?
-    if(inair(ent))
-    {
-        return 0;
-    }
+	// Frozen?
+	if (ent->frozen)
+	{
+		return 0;
+	}
 
-    // Frozen?
-    if(ent->frozen)
-    {
-        return 0;
-    }
+	// Falling?
+	if (ent->falling)
+	{
+		return 0;
+	}
 
-    // Falling?
-    if(ent->falling)
-    {
-        return 0;
-    }
-
-    return 1;
+	return 1;
 }
 
 // Caskey, Damon V.
 // 2018-09-17
 //
 // AI blocking decision. Handles AI's chances
-// to block assuming it is allowed. Returns true
-// if AI chooses to attempt a block.
+// to block. Returns true if AI chooses to attempt 
+// a block.
 int check_blocking_decision(entity *ent)
 {
-    // If we have nopassiveblock enabled and we're
-    // already blocking, then we want the AI to
-    // keep blocking (like most players would).
-    if(ent->modeldata.nopassiveblock)
-    {
-        if(ent->blocking)
-        {
-           return 1;
-        }
-    }
+	// If we have nopassiveblock enabled and we're
+	// already blocking, then we want the AI to
+	// keep blocking (like most players would).
+	if (ent->modeldata.nopassiveblock)
+	{
+		if (ent->blocking)
+		{
+			return 1;
+		}
+	}
 
-    // Run random chance against blockodds. If it
-    // passes, AI will block.
-    if((rand32()&ent->modeldata.blockodds) == 1)
-    {
-        return 1;
-    }
+	// Run random chance against blockodds. If it
+	// passes, AI will block.
+	if ((rand32()&ent->modeldata.blockodds) == 1)
+	{
+		return 1;
+	}
 
-    // If we got this far, we never decided to
-    // block, so return false.
-    return 0;
+	// If we got this far, we never decided to
+	// block, so return false.
+	return 0;
 }
 
 // Caskey, Damon V.
 // 2018-09-17
 //
 // Runs all blocking conditions and returns true
-// if the attack is to be blocked.
+// if the attack should be blocked.
 int check_blocking_master(entity *ent, entity *other, s_collision_attack *attack)
 {
-    e_entity_type entity_type;
+	e_entity_type entity_type;
 
-    entity_type = ent->modeldata.type;
+	entity_type = ent->modeldata.type;
 
-    // 2018-09-17, we only distinguish between
-    // players and everything else, but let's use
-    // a Switch instead of an IF in case we ever
-    // need to be more nuanced.
-    switch(entity_type)
-    {
-        case TYPE_PLAYER:
+	// Check AI or player blocking rules.
+	if (entity_type & TYPE_PLAYER)
+	{
+		// For players, all we need to know is if they
+		// are in a blocking state. If not we exit.
+		if (!ent->blocking)
+		{
+			return 0;
+		}
 
-            // For players, all we need to know is if they
-            // are in a blocking state. If not we exit.
-            if(!ent->blocking)
-            {
-                return 0;
-            }
+		// Verify entity can block the attack at all.
+		if (!check_blocking_eligible(ent, other, attack))
+		{
+			return 0;
+		}
+	}
+	else
+	{
+		// AI must pass a series of conditions
+		// before it may block attacks.
+		if (!check_blocking_rules(ent))
+		{
+			return 0;
+		}
 
-            // Verify we can block the attack.
-            if(!check_blocking_eligible(ent, other, attack))
-            {
-                return 0;
-            }
+		// Now that we know AI is allowed
+		// to block let's find out if it
+		// wants to.
+		if (!check_blocking_decision(ent))
+		{
+			return 0;
+		}
 
-            break;
+		// Verify entity can block the attack at all.
+		if (!check_blocking_eligible(ent, other, attack))
+		{
+			return 0;
+		}
+	}
 
-        default:
-
-            // AI must pass a series of conditions
-            // before it may block attacks.
-            if(!check_blocking_rules(ent))
-            {
-                return 0;
-            }
-
-            // Now that we know AI is allowed
-            // to block let's find out if it
-            // wants to.
-            if(!check_blocking_decision(ent))
-            {
-                return 0;
-            }
-
-            // Verify the attack can be blocked.
-            if(!check_blocking_eligible(ent, other, attack))
-            {
-                return 0;
-            }
-
-            break;
-    }
-
-    // Looks like we made it through
-    // all the verifications. Return true.
-    return 1;
+	// Looks like we made it through
+	// all the verifications. Return true.
+	return 1;
 }
 
 // Caskey, Damon V.
@@ -19681,28 +19976,28 @@ int check_blocking_master(entity *ent, entity *other, s_collision_attack *attack
 // actions, and scripts.
 void set_blocking_action(entity *ent, entity *other, s_collision_attack *attack)
 {
-    // Execute the attacker's didhit script with blocked flag.
-    execute_didhit_script(other, ent, attack, 1);
+	// Execute the attacker's didhit script with blocked flag.
+	execute_didhit_script(other, ent, attack, 1);
 
-    // Set up blocking action and flag.
-    ent->takeaction = common_block;
-    set_blocking(ent);
+	// Set up blocking action and flag.
+	ent->takeaction = common_block;
+	set_blocking(ent);	
 
-    // Stop movement.
-    ent->velocity.x = ent->velocity.z = 0;
+	// Stop movement.
+	ent->velocity.x = ent->velocity.z = 0;
 
-    // Execute our block script.
-    execute_didblock_script(ent, other, attack);
+	// If we have guardpoints, then reduce them here.
+	if (ent->modeldata.guardpoints.max > 0)
+	{
+		ent->modeldata.guardpoints.current -= attack->guardcost;
+	}
 
-    // If we have guardpoints, then reduce them here.
-    if(ent->modeldata.guardpoints.max > 0)
-    {
-        ent->modeldata.guardpoints.current -= attack->guardcost;
-    }
+	// Blocked hit is still a hit, so
+	// increment the attacker's hit counter.
+	++other->animation->animhits;
 
-    // Blocked hit is still a hit, so
-    // increment the attacker's hit counter.
-    ++other->animation->animhits;
+	// Execute our block script.
+	execute_didblock_script(ent, other, attack);
 }
 
 // Caskey, Damon V.
@@ -19712,21 +20007,21 @@ void set_blocking_action(entity *ent, entity *other, s_collision_attack *attack)
 // should trigger it.
 int check_blocking_pain(entity *ent, s_collision_attack *attack)
 {
-    // If we don't have blockpain,
-    // nothing else to do!
-    if(!self->modeldata.blockpain)
-    {
-        return 0;
-    }
+	// If we don't have blockpain,
+	// nothing else to do!
+	if (!self->modeldata.blockpain)
+	{
+		return 0;
+	}
 
-    // If blockpain is greater than attack
-    // force, we don't apply it.
-    if(self->modeldata.blockpain > attack->attack_force)
-    {
-        return 0;
-    }
+	// If blockpain is greater than attack
+	// force, we don't apply it.
+	if (self->modeldata.blockpain > attack->attack_force)
+	{
+		return 0;
+	}
 
-    return 1;
+	return 1;
 }
 
 // Caskey, Damon V.
@@ -19735,32 +20030,32 @@ int check_blocking_pain(entity *ent, s_collision_attack *attack)
 // Place entity into appropriate blocking animation.
 void set_blocking_animation(entity *ent, s_collision_attack *attack)
 {
-    // If we have an appropriate blockpain, lets
-    // apply it here.
-    if(check_blocking_pain(ent, attack))
-    {
-        set_blockpain(self, attack->attack_type, 1);
-    }
-    else
-    {
-        ent_set_anim(ent, ANI_BLOCK, 0);
-    }
+	// If we have an appropriate blockpain, lets
+	// apply it here.
+	if (check_blocking_pain(ent, attack))
+	{
+		set_blockpain(self, attack->attack_type, 1);
+	}
+	else
+	{
+		ent_set_anim(ent, ANI_BLOCK, 0);
+	}
 }
 
 // Caskey, Damon V.
 // 2018-09-21
 //
 // Perform a block.
-void do_blocking(entity *ent, entity *other, s_collision_attack *attack)
-{
-    // Place entity in blocking animation.
-    set_blocking_animation(ent, attack);
+void do_passive_block(entity *ent, entity *other, s_collision_attack *attack)
+{	
+	// Place entity in blocking animation.
+	set_blocking_animation(ent, attack);
+	
+	// Spawn the blocking flash.
+	spawn_attack_flash(ent, attack, attack->blockflash, ent->modeldata.bflash);	
 
-    // Run blocking actions and scripts.
-    set_blocking_action(ent, other, attack);
-
-    // Spawn the blocking flash.
-    spawn_attack_flash(ent, attack, attack->blockflash, ent->modeldata.bflash);
+	// Run blocking actions and scripts.
+	set_blocking_action(ent, other, attack);
 }
 
 // Caskey, Damon V.
@@ -19770,65 +20065,65 @@ void do_blocking(entity *ent, entity *other, s_collision_attack *attack)
 // flash effect entity if conditions are met.
 entity *spawn_attack_flash(entity *ent, s_collision_attack *attack, int attack_flash, int model_flash)
 {
-    int to_spawn;
-    entity *flash;
+	int to_spawn;
+	entity *flash;
 
-    // Flash disabled by attack?
-    // We're done. Do nothing and exit.
-    if(attack->no_flash)
-    {
-       return NULL;
-    }
+	// Flash disabled by attack?
+	// We're done. Do nothing and exit.
+	if (attack->no_flash)
+	{
+		return NULL;
+	}
 
-    // If the model has custom flash disabled,
-    // then default to the model's global flash.
-    //
-    // Otherwise we need to see if the custom
-    // attack flash index is valid. If it is, then
-    // we will use it to spawn a flash effect.
-    if(!ent->modeldata.noatflash)
-    {
-        // Valid custom flash index?
-        if(attack->blockflash >= 0)
-        {
-            to_spawn = attack_flash;
-        }
-        else
-        {
-            to_spawn = model_flash;
-        }
-    }
-    else
-    {
-        to_spawn = model_flash;
-    }
+	// If the model doesn't allow incoming custom 
+	// flash  effects, default to the model's global flash.
+	//
+	// Otherwise we need to see if the custom
+	// attack flash index is valid. If it is, then
+	// we will use it to spawn a flash effect.
+	if (!ent->modeldata.noatflash)
+	{
+		// Valid custom flash index?
+		if (attack_flash >= 0)
+		{
+			to_spawn = attack_flash;
+		}
+		else
+		{
+			to_spawn = model_flash;
+		}
+	}
+	else
+	{
+		to_spawn = model_flash;
+	}
 
-    // Spawn the flash at last hit position.
-    flash = spawn(lasthit.position.x, lasthit.position.z, lasthit.position.y, DIRECTION_LEFT, NULL, to_spawn, NULL);
+	// Spawn the flash at last hit position.
+	flash = spawn(lasthit.position.x, lasthit.position.z, lasthit.position.y, DIRECTION_LEFT, NULL, to_spawn, NULL);
 
-    // One last check to make sure we
-    // were able to spawn to flash entity.
-    if(flash)
-    {
-        // Set up basic properties.
-        flash->spawntype    = SPAWN_TYPE_FLASH;
-        flash->base         = lasthit.position.y;
-        flash->autokill     = 1;
+	// One last check to make sure we
+	// were able to spawn to flash entity.
+	if (flash)
+	{
+		// Set up basic properties.
+		flash->spawntype = SPAWN_TYPE_FLASH;
+		flash->base = lasthit.position.y;
+		flash->autokill |= AUTOKILL_ANIMATION_COMPLETE;
 
-        // If flipping enabled, flip the flash based on which
-        // side of entity the hit came from.
-        if(flash->modeldata.toflip)
-        {
-            flash->direction = (lasthit.position.x > ent->position.x);
-        }
+		// If flipping enabled, flip the flash based on which
+		// side of entity the hit came from.
+		if (flash->modeldata.toflip)
+		{
+			flash->direction = (lasthit.position.x > ent->position.x);
+		}
 
-        // Run flash's spawn script.
-        execute_onspawn_script(flash);
+		// Run flash's spawn script.
+		execute_onspawn_script(flash);
 
-        return flash;
-    }
+		return flash;
+	}
 
-    return NULL;
+	return NULL;
 }
 
 void do_attack(entity *e)
@@ -19866,7 +20161,8 @@ void do_attack(entity *e)
         topowner = topowner->owner;
     }
 
-    if(e->projectile > 0)
+	// If any blast active, use projectile hit property.
+    if(e->projectile & BLAST_ATTACK)
     {
         them = e->modeldata.projectilehit;
     }
@@ -19902,7 +20198,7 @@ void do_attack(entity *e)
         }
 
         // Check collision. If a collision
-        // is found, lasthit the impacting
+        // is found, the impacting
         // collision pointers are also
         // populated into lasthit, which
         // we will use below.
@@ -19922,9 +20218,9 @@ void do_attack(entity *e)
 
         // Verify target is invincible,
         // or attack type is an item.
-        // This is too allow item collection
+        // This is to allow item collection
         // even while invincible.
-        if(target->invincible)
+        if(target->invincible & INVINCIBLE_INTANGIBLE)
         {
             if(attack->attack_type != ATK_ITEM)
             {
@@ -19933,7 +20229,7 @@ void do_attack(entity *e)
         }
 
         // If attack is set to only hit
-        // one entity at a _time (attackone),
+        // one entity at a time (attackone),
         // we verify last hit (lasthit) is
         // set. If last hit is set and
         // differs from current target,
@@ -19957,11 +20253,11 @@ void do_attack(entity *e)
             continue;
         }
 
-        // Pain _time must have expired.
+        // Pain time must have expired.
         // This is to allow reasonable delay
         // between hits so engine will not
         // run hit on every update.
-        if(target->pain_time >= _time)
+        if(target->next_hit_time >= _time)
         {
             continue;
         }
@@ -19979,8 +20275,10 @@ void do_attack(entity *e)
             continue;
         }
 
-        // Target laying down? Exit if
+		// Target laying down? Exit if
         // attack only hits standing targets.
+		// Otherwise exit if attack only hits 
+		// grounded targets.
         if(target->takeaction == common_lie)
         {
             if(attack->otg == OTG_NONE)
@@ -19988,11 +20286,8 @@ void do_attack(entity *e)
                 continue;
             }
         }
-
-        // Target NOT laying down? Exit if
-        // attack only hits grounded targets.
-        if(target->takeaction != common_lie)
-        {
+		else
+		{
             if(attack->otg == OTG_GROUND_ONLY)
             {
                 continue;
@@ -20067,15 +20362,17 @@ void do_attack(entity *e)
                 didfind_item(e);
                 return;
             }
-            //if #051
-            if(self->toexplode == 1)
+            
+			// Set bomb projectile to detonate status if it 
+			// hits or takes a hit.
+            if(self->toexplode & EXPLODE_PREPARED)
             {
-                self->toexplode = 2;    // Used so the bomb type entity explodes when hit
+                self->toexplode |= EXPLODE_DETONATE;
             }
-            //if #052
-            if(e->toexplode == 1)
+           
+            if(e->toexplode & EXPLODE_PREPARED)
             {
-                e->toexplode = 2;    // Used so the bomb type entity explodes when hitting
+                e->toexplode |= EXPLODE_DETONATE;
             }
 
             if(inair(self))
@@ -20089,13 +20386,13 @@ void do_attack(entity *e)
             if(didblock)
             {
                 // Perform the blocking actions.
-                do_blocking(self, e, attack);
+                do_passive_block(self, e, attack);
             }
             // Counter the attack?
             else if(self->animation->counterrange &&	// Has counter range?
                     (self->animpos >= self->animation->counterrange->frame.min && self->animpos <= self->animation->counterrange->frame.max) &&  // Current frame within counter range frames?
                     !self->frozen &&
-                    (self->energy_status.health_current > force || (self->energy_status.health_current-force <= 0 && (self->animation->counterrange->condition == COUNTERACTION_CONDITION_ALWAYS_RAGE))) &&   // Rage or not?
+                    (self->energy_state.health_current > force || (self->energy_state.health_current-force <= 0 && (self->animation->counterrange->condition == COUNTERACTION_CONDITION_ALWAYS_RAGE))) &&   // Rage or not?
                     // counterrange conditions
                     ( (self->animation->counterrange->condition == COUNTERACTION_CONDITION_ALWAYS) || (self->animation->counterrange->condition == COUNTERACTION_CONDITION_ALWAYS_RAGE) ||
                     (self->animation->counterrange->condition == COUNTERACTION_CONDITION_HOSTILE && e->modeldata.type & them) ||
@@ -20106,7 +20403,7 @@ void do_attack(entity *e)
                     // Take damage from attack?
                     if(self->animation->counterrange->damaged == COUNTERACTION_DAMAGE_NORMAL)
                     {
-                        if (self->energy_status.health_current-force <= 0)
+                        if (self->energy_state.health_current-force <= 0)
                         {
                             // White Dragon: commented the alternative method
                             /*s_collision_attack atk;
@@ -20126,11 +20423,11 @@ void do_attack(entity *e)
                             self = temp;
                             return;*/
 
-                            self->energy_status.health_current = 1; // rage
+                            self->energy_state.health_current = 1; // rage
                         }
                         else
                         {
-                            self->energy_status.health_current -= force;
+                            self->energy_state.health_current -= force;
                         }
                     }
 
@@ -20201,13 +20498,14 @@ void do_attack(entity *e)
             {
                 def = self;
             }
-            //if #055
+            
+			// Follow animations.
             if((e->animation->followup.animation) && // follow up?
                     (!e->animation->counterrange) && // This isn't suppossed to be a counter, right?
                     ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE) || (self->modeldata.type & e->modeldata.hostile)) &&                                // Does type matter?
-                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_NOBLOCK) || ((self->energy_status.health_current > 0) && !didblock)) &&                             // check if health or not blocking matters
-                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_NOBLOCK_NOGRAB) || ((self->energy_status.health_current > 0) && !didblock && cangrab(e, self)) ) && // check if nograb matters
-                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_BLOCK) || ((self->energy_status.health_current > 0) && didblock))                                   // check if health or blocking matters
+                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_NOBLOCK) || ((self->energy_state.health_current > 0) && !didblock)) &&                             // check if health or not blocking matters
+                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_NOBLOCK_NOGRAB) || ((self->energy_state.health_current > 0) && !didblock && cangrab(e, self)) ) && // check if nograb matters
+                    ((e->animation->followup.condition < FOLLOW_CONDITION_HOSTILE_NOKILL_BLOCK) || ((self->energy_state.health_current > 0) && didblock))                                   // check if health or blocking matters
               )
             {
                 current_follow_id = animfollows[e->animation->followup.animation - 1];
@@ -20220,17 +20518,19 @@ void do_attack(entity *e)
                     ent_set_anim(e, current_follow_id, 1);          // Then go to it!
                 }
                 //followed = 1; // quit loop, animation is changed
-            }//end of if #055
-
-            self->attack_id_incoming = current_attack_id;
-            if(self == def)
-            {
-                self->blocking = didblock;    // yeah, if get hit, stop blocking
             }
 
-            //2011/11/24 UT: move the pain_time logic here,
+            self->attack_id_incoming = current_attack_id;
+            
+			// If hit, stop blocking.
+			if(self == def)
+            {
+                self->blocking = didblock;   
+            }
+
+            //2011/11/24 UT: move the next_hit_time logic here,
             // because block needs this as well otherwise blockratio causes instant death
-            self->pain_time = _time + (attack->pain_time ? attack->pain_time : (GAME_SPEED / 5));
+            self->next_hit_time = _time + (attack->next_hit_time ? attack->next_hit_time : (GAME_SPEED / 5));
             self->nextattack = 0; // reset this, make it easier to fight back
         }//end of if #05
         self = temp;
@@ -20250,20 +20550,20 @@ void do_attack(entity *e)
             }
             else if(e != topowner && current_anim->energycost->cost > 0 && nocost && !healthcheat && !e->tocost) // if it is not top, then must be a shot
             {
-                if(current_anim->energycost->mponly != COST_TYPE_MP_THEN_HP && topowner->energy_status.mp_current > 0)
+                if(current_anim->energycost->mponly != COST_TYPE_MP_THEN_HP && topowner->energy_state.mp_current > 0)
                 {
-                    topowner->energy_status.mp_current -= current_anim->energycost->cost;
-                    if(topowner->energy_status.mp_current < 0)
+                    topowner->energy_state.mp_current -= current_anim->energycost->cost;
+                    if(topowner->energy_state.mp_current < 0)
                     {
-                        topowner->energy_status.mp_current = 0;
+                        topowner->energy_state.mp_current = 0;
                     }
                 }
                 else
                 {
-                    topowner->energy_status.health_current -= current_anim->energycost->cost;
-                    if(topowner->energy_status.health_current <= 0)
+                    topowner->energy_state.health_current -= current_anim->energycost->cost;
+                    if(topowner->energy_state.health_current <= 0)
                     {
-                        topowner->energy_status.health_current = 1;
+                        topowner->energy_state.health_current = 1;
                     }
                 }
 
@@ -20302,23 +20602,23 @@ void do_attack(entity *e)
 
                     case BLOCK_TYPE_MP_ONLY:
 
-                        def->energy_status.mp_current -= force;
+                        def->energy_state.mp_current -= force;
                         force = 0;
 
-                        if(def->energy_status.mp_current < 0)
+                        if(def->energy_state.mp_current < 0)
                         {
-                            def->energy_status.mp_current = 0;
+                            def->energy_state.mp_current = 0;
                         }
 
                     case BLOCK_TYPE_MP_FIRST:
 
-                        def->energy_status.mp_current -= force;
+                        def->energy_state.mp_current -= force;
 
                         /* If there isn't enough MP to cover force, subtract remaining MP from force and set MP to 0 */
-                        if(def->energy_status.mp_current < 0)
+                        if(def->energy_state.mp_current < 0)
                         {
-                            force = -def->energy_status.mp_current;
-                            def->energy_status.mp_current = 0;
+                            force = -def->energy_state.mp_current;
+                            def->energy_state.mp_current = 0;
                         }
                         else
                         {
@@ -20327,21 +20627,21 @@ void do_attack(entity *e)
 
                     case BLOCK_TYPE_BOTH:
 
-                        def->energy_status.mp_current -= force;
+                        def->energy_state.mp_current -= force;
 
-                        if(def->energy_status.mp_current < 0)
+                        if(def->energy_state.mp_current < 0)
                         {
-                            def->energy_status.mp_current = 0;
+                            def->energy_state.mp_current = 0;
                         }
                 }
 
-                if(force < def->energy_status.health_current)                    // If an attack won't deal damage, this line won't do anything anyway.
+                if(force < def->energy_state.health_current)                    // If an attack won't deal damage, this line won't do anything anyway.
                 {
-                    def->energy_status.health_current -= force;
+                    def->energy_state.health_current -= force;
                 }
                 else if(nochipdeath)                       // No chip deaths?
                 {
-                    def->energy_status.health_current = 1;
+                    def->energy_state.health_current = 1;
                 }
                 else
                 {
@@ -20374,7 +20674,7 @@ void do_attack(entity *e)
                 sound_play_sample(SAMPLE_BLOCK, 0, savedata.effectvol, savedata.effectvol, 100);    // Default block sound effect
             }
         }
-        else if(e->projectile > 0 && SAMPLE_INDIRECT >= 0)
+        else if(e->projectile & BLAST_ATTACK && SAMPLE_INDIRECT >= 0)
         {
             sound_play_sample(SAMPLE_INDIRECT, 0, savedata.effectvol, savedata.effectvol, 100);
         }
@@ -20392,7 +20692,7 @@ void do_attack(entity *e)
             sound_play_sample(attack->hitsound, 0, savedata.effectvol, savedata.effectvol, t);
         }
 
-        if(e->remove_on_attack)
+        if(e->autokill & AUTOKILL_ATTACK_HIT)
         {
             kill_entity(e);
         }
@@ -20447,7 +20747,7 @@ bool check_landframe(entity *ent)
     }
 
     // Can't be bound with a landframe override.
-    if(check_bind_override(ent, BINDING_OVERRIDING_LANDFRAME))
+    if(check_bind_override(ent, BIND_OVERRIDE_LANDFRAME))
     {
         return 0;
     }
@@ -20473,7 +20773,7 @@ bool check_landframe(entity *ent)
         {
             effect->spawntype = SPAWN_TYPE_DUST_LAND;
             effect->base = ent->position.y;
-            effect->autokill = 2;
+            effect->autokill |= AUTOKILL_ANIMATION_COMPLETE;
             execute_onspawn_script(effect);
         }
     }
@@ -20530,7 +20830,7 @@ int check_edge(entity *ent)
          ((base_down < y - t_alt) && plat_down == NULL)
     ) return EDGE_LEFT + EDGE_RIGHT;
 
-    return EDGE_NO;
+    return EDGE_NONE;
 }
 
 void check_gravity(entity *e)
@@ -20540,7 +20840,7 @@ void check_gravity(entity *e)
     float gravity;
     float fmin, fmax;
 
-    if(e->update_mark & 8)
+    if(e->update_mark & UPDATE_MARK_CHECK_GRAVITY)
     {
         return;
     }
@@ -20551,7 +20851,7 @@ void check_gravity(entity *e)
     adjust_base(self, &plat);
 
     if (self->position.y <= self->base) self->edge = check_edge(self); // && self->idling & IDLING_ACTIVE
-    else self->edge = EDGE_NO;
+    else self->edge = EDGE_NONE;
 
     if(!is_frozen(self) )// Incase an entity is in the air, don't update animations
     {
@@ -20647,8 +20947,8 @@ void check_gravity(entity *e)
                 // White Dragon: fix for too low velocityz
                 if ( !cplat || (cplat && diff(get_platform_base(cplat),self->position.y) > T_WALKOFF) )
                 {
-                    self->idling = IDLING_INACTIVE;
-                    self->ducking = DUCK_INACTIVE;
+                    self->idling = IDLING_NONE;
+                    self->ducking = DUCK_NONE;
                     self->takeaction = common_walkoff;
                     ent_set_anim(self, ANI_WALKOFF, 0);
                     self->landed_on_platform = plat = NULL;
@@ -20663,14 +20963,13 @@ void check_gravity(entity *e)
                 if(self->velocity.y <=0)
                 {
                     // No bind target, or binding set to ignore fall lands.
-                    if(!check_bind_override(self, BINDING_OVERRIDING_FALL_LAND))
+                    if(!check_bind_override(self, BIND_OVERRIDE_FALL_LAND))
                     {
                         self->position.y = self->base;
                         self->falling = 0;
 
                         if ( self->hitwall ) self->hitwall = 0;
 
-                        //self->projectile = 0;
                         // cust dust entity
                         if(self->modeldata.dust.fall_land >= 0 && self->velocity.y < -1 && self->drop)
                         {
@@ -20679,7 +20978,7 @@ void check_gravity(entity *e)
                             {
                                 dust->spawntype = SPAWN_TYPE_DUST_FALL;
                                 dust->base = self->position.y;
-                                dust->autokill = 2;
+                                dust->autokill |= AUTOKILL_ANIMATION_COMPLETE;
                                 execute_onspawn_script(dust);
                             }
                         }
@@ -20737,14 +21036,15 @@ void check_gravity(entity *e)
                 }
             }// end of if - land checking
         }// end of if  - in-air checking
-        if(self->toss_time <= _time)
+        
+		if(self->toss_time <= _time)
         {
             self->toss_time = _time + 1;
         }
 
     }//end of if
 
-    self->update_mark |= 8;
+    self->update_mark |= UPDATE_MARK_CHECK_GRAVITY;
 
     self = tempself;
 }
@@ -20780,10 +21080,8 @@ int check_lost()
         else
         {
             attack          = emptyattack;
-            attack.dropv.y = default_model_dropv.y;
-            attack.dropv.x = default_model_dropv.x;
-            attack.dropv.z = default_model_dropv.z;
-            attack.attack_force = self->energy_status.health_current;
+            attack.dropv	= default_model_dropv;
+            attack.attack_force = self->energy_state.health_current;
             attack.attack_type  = ATK_PIT;
             self->takedamage(self, &attack, 0);
         }
@@ -20798,10 +21096,8 @@ int check_lost()
         else
         {
             attack          = emptyattack;
-            attack.dropv.y = default_model_dropv.y;
-            attack.dropv.x = default_model_dropv.x;
-            attack.dropv.z = default_model_dropv.z;
-            attack.attack_force = self->energy_status.health_current;
+			attack.dropv	= default_model_dropv;
+            attack.attack_force = self->energy_state.health_current;
             attack.attack_type  = ATK_LIFESPAN;
             self->takedamage(self, &attack, 0);
         }
@@ -20809,7 +21105,7 @@ int check_lost()
     }//else
 
     // Doom count down
-    if(!is_frozen(self) && self->lifespancountdown != 0x7fffffff)
+    if(!is_frozen(self) && self->lifespancountdown != LIFESPAN_DEFAULT)
     {
         self->lifespancountdown--;
     }
@@ -20849,7 +21145,7 @@ void check_ai()
 {
     if(self->nextthink <= _time && !endgame)
     {
-        self->update_mark |= 2; //mark it
+        self->update_mark |= UPDATE_MARK_CHECK_AI; //mark it
         // take actions
         if(self->takeaction)
         {
@@ -20960,7 +21256,7 @@ void adjust_base(entity *e, entity **pla)
         *pla = other = self->landed_on_platform = NULL;
     }
 
-    if(other && !(other->update_mark & 8))
+    if(other && !(other->update_mark & UPDATE_MARK_CHECK_GRAVITY))
     {
         check_gravity(other);
     }
@@ -20978,7 +21274,7 @@ void adjust_base(entity *e, entity **pla)
 
     if( (plat = self->landed_on_platform) )
     {
-        if(!(plat->update_mark & 8))
+        if(!(plat->update_mark & UPDATE_MARK_CHECK_GRAVITY))
         {
             check_gravity(plat);
         }
@@ -21153,9 +21449,10 @@ void update_animation()
         self->sleeptime = _time + self->modeldata.sleepwait;
     }
 
-    if(self->invincible && _time >= self->invinctime)    // Invincible time has run out, turn off
+	// Invincible time has run out, turn off.
+    if(self->invincible != INVINCIBLE_NONE && _time >= self->invinctime)
     {
-        self->invincible    = 0;
+        self->invincible    = INVINCIBLE_NONE;
         self->blink         = 0;
         self->invinctime    = 0;
         self->arrowon       = 0;
@@ -21208,9 +21505,9 @@ void update_animation()
             }
             else if((unsigned)f >= (unsigned)self->animation->numframes)
             {
-                self->animating = 0;
+                self->animating = ANIMATING_NONE;
 
-                if(self->autokill)
+                if(self->autokill & AUTOKILL_ANIMATION_COMPLETE)
                 {
                     kill_entity(self);
                     return;
@@ -21230,9 +21527,9 @@ void update_animation()
 
             if(!self->animation->loop.mode)
             {
-                self->animating = 0;
+                self->animating = ANIMATING_NONE;
 
-                if(self->autokill)
+                if(self->autokill & AUTOKILL_ANIMATION_COMPLETE)
                 {
                     kill_entity(self);
                     return;
@@ -21250,9 +21547,10 @@ void update_animation()
         if(self->animating)
         {
             //self->nextanim = _time + (self->animation->delay[f]);
-            self->update_mark |= 1; // frame updated, mark it
+            self->update_mark |= UPDATE_MARK_UPDATE_ANIMATION; // frame updated, mark it
             // just switch frame to f, if frozen, expand_time will deal with it well
             update_frame(self, f);
+			bothnewkeys = 0; //stop mutiple skips.
         }
     }
 
@@ -21261,7 +21559,7 @@ void update_animation()
 void check_attack()
 {
     // a normal fall
-    if(self->falling && !self->projectile)
+    if(self->falling && self->projectile == BLAST_NONE)
     {
         self->attack_id_outgoing = 0;
         return;
@@ -21292,23 +21590,29 @@ void check_attack()
 // energy was added, 0 otherwise.
 int do_energy_charge(entity *ent)
 {
-    // Have we surpassed the next allowed charge time?
-    // If so, we add the amount of energy from chargerate
-    // and reset the next available time.
-    if(ent->charging && _time >= ent->mpchargetime)
-    {
-        // How much GAME_SPEED will be added onto elapsed time to know when we can next add energy.
-        float speed_rate = 0.25;
-        int factor = GAME_SPEED * speed_rate;
+	#define ENERGY_CHARGE_RATE 0.25
 
-        ent->energy_status.mp_current += ent->modeldata.chargerate;
-        ent->mpchargetime = _time + factor;
+	// Must be charging.
+	if (!ent->charging)
+	{
+		return 0;
+	}
 
-        return 1;
-    }
+	// Must be time for a charge tick.
+	if (_time < ent->mpchargetime)
+	{
+		return 0;
+	}
 
-    // Didn't charge.
-    return 0;
+	// Add charge rate to current mp.
+	ent->energy_state.mp_current += ent->modeldata.chargerate;
+
+	// Time for next charge tick.
+	ent->mpchargetime = _time + (GAME_SPEED * ENERGY_CHARGE_RATE);
+
+	return 1;
+
+	#undef ENERGY_CHARGE_RATE
 }
 
 
@@ -21350,60 +21654,60 @@ void update_health()
             // 1 Only recover MP > mpstableval.
             // 2 No recover. Drop MP if MP < mpstableval.
             // 3 Both: recover if MP if MP < mpstableval and drop if MP > mpstableval.
-            // 0 Default. Recover MP at all times.
+            // 4 Gain until stable, then fall to stable.
+			// 0 Default. Recover MP at all times.
 
-
-            if (self->modeldata.mpstable == 1)
+			if (self->modeldata.mpstable == 1)
             {
-                if (self->energy_status.mp_current < self->modeldata.mpstableval)
+                if (self->energy_state.mp_current < self->modeldata.mpstableval)
                 {
-                    self->energy_status.mp_current += self->modeldata.mprate;
+                    self->energy_state.mp_current += self->modeldata.mprate;
                 }
             }
             else if(self->modeldata.mpstable == 2)
             {
-                if (self->energy_status.mp_current > self->modeldata.mpstableval)
+                if (self->energy_state.mp_current > self->modeldata.mpstableval)
                 {
-                    self->energy_status.mp_current -= self->modeldata.mpdroprate;
+                    self->energy_state.mp_current -= self->modeldata.mpdroprate;
                 }
             }
             else if (self->modeldata.mpstable == 3)
             {
-                if (self->energy_status.mp_current < self->modeldata.mpstableval)
+                if (self->energy_state.mp_current < self->modeldata.mpstableval)
                 {
 
-                    self->energy_status.mp_current += self->modeldata.mprate;
+                    self->energy_state.mp_current += self->modeldata.mprate;
                 }
-                else if (self->energy_status.mp_current > self->modeldata.mpstableval)
+                else if (self->energy_state.mp_current > self->modeldata.mpstableval)
                 {
-                    self->energy_status.mp_current -= self->modeldata.mpdroprate;
+                    self->energy_state.mp_current -= self->modeldata.mpdroprate;
                 }
             }
 
             // OX. Stabletype 4. Gain mp until it reaches max. Then it drops down to mpstableval.
             else if (self->modeldata.mpstable == 4)
             {
-                if(self->energy_status.mp_current <= self->modeldata.mpstableval)
+                if(self->energy_state.mp_current <= self->modeldata.mpstableval)
                 {
                     self->modeldata.mpswitch = 0;
                 }
-                else if(self->energy_status.mp_current == self->modeldata.mp)
+                else if(self->energy_state.mp_current == self->modeldata.mp)
                 {
                     self->modeldata.mpswitch = 1;
                 }
 
                 if(self->modeldata.mpswitch == 1)
                 {
-                    self->energy_status.mp_current -= self->modeldata.mpdroprate;
+                    self->energy_state.mp_current -= self->modeldata.mpdroprate;
                 }
                 else if(self->modeldata.mpswitch == 0)
                 {
-                    self->energy_status.mp_current += self->modeldata.mprate;
+                    self->energy_state.mp_current += self->modeldata.mprate;
                 }
             }
             else
             {
-                self->energy_status.mp_current += self->modeldata.mprate;
+                self->energy_state.mp_current += self->modeldata.mprate;
             }
 
             self->magictime = _time + GAME_SPEED;    //Reset magictime.
@@ -21413,235 +21717,258 @@ void update_health()
     // Active MP charging?
     do_energy_charge(self);
 
-    if(self->energy_status.mp_current > self->modeldata.mp)
+    if(self->energy_state.mp_current > self->modeldata.mp)
     {
-        self->energy_status.mp_current = self->modeldata.mp;    // Don't want to add more than the max
+        self->energy_state.mp_current = self->modeldata.mp;    // Don't want to add more than the max
     }
 
-    if(self->energy_status.health_old < self->energy_status.health_current)
+    if(self->energy_state.health_old < self->energy_state.health_current)
     {
-        self->energy_status.health_old++;
+        self->energy_state.health_old++;
     }
-    else if(self->energy_status.health_old > self->energy_status.health_current)
+    else if(self->energy_state.health_old > self->energy_state.health_current)
     {
-        self->energy_status.health_old--;
+        self->energy_state.health_old--;
     }
 
-    if(self->energy_status.mp_old < self->energy_status.mp_current)
+    if(self->energy_state.mp_old < self->energy_state.mp_current)
     {
-        self->energy_status.mp_old++;
+        self->energy_state.mp_old++;
     }
-    else if(self->energy_status.mp_old > self->energy_status.mp_current)
+    else if(self->energy_state.mp_old > self->energy_state.mp_current)
     {
-        self->energy_status.mp_old--;
+        self->energy_state.mp_old--;
     }
+}
+
+// Caskey, Damon V.
+// 2019-01-18
+//
+// Free all members of a recursive damage list.
+void free_recursive_list(s_damage_recursive * head)
+{
+	s_damage_recursive * cursor;
+
+	while (head != NULL)
+	{
+		cursor = head;
+		head = head->next;
+		free(cursor);
+	}
+}
+
+// Caskey, Damon V.
+// 2019-01-20
+//
+// Remove a single node from the recursive damage linked list.
+void free_damage_recursive_node(s_damage_recursive **list, s_damage_recursive *node)
+{
+	s_damage_recursive *cursor;
+	s_damage_recursive *previous;
+
+	// Initialize previous.
+	previous = NULL;
+
+	// Iterate each node of list. On each iteration, previous is
+	// set to cursor before cursor iterates.
+	for (cursor = *list; cursor != NULL; previous = cursor, cursor = cursor->next) 
+	{
+		// Are we at target element?
+		if (cursor == node)
+		{ 
+			// If previous is NULL we're at the head.
+			if (previous == NULL) 
+			{
+				// Move node from head's next to head.
+				*list = cursor->next;
+			}
+			else 
+			{
+				// Move previous next to cursor next. This
+				// effectivly "skips" cursor in sequence.
+				previous->next = cursor->next;
+			}
+
+			// Deallocate the node.
+			free(cursor);
+
+			return;
+		}
+	}
 }
 
 // damage_recursive
 // Caskey, Damon V.
 // 2009-06-17
 // --2018-01-02 retooled from former common_dot.
+// --2019-01-16 Replace recursion array with linked list.
 //
 // Apply recursive damage (damage over time (dot)).
-//
-// When an entity is hit with a recursive damage
-// enabled attack, an array keyed from 0 to
-// MAX_DOTS on the target will be populated
-// with recursive damage values. Which key
-// will be populated is module author's choice,
-// determined an argument in the recursive attack.
-// This function operates by reviewing all keys
-// of the target's recursive damage array, and
-// applying any values found accordingly.
-void damage_recursive(entity *target)
+void damage_recursive(entity *ent)
 {
     int         force_final;    // Final force; total damage after defense and offense factors are applied.
-    int         attack_type;    // Attack type.
-    int         index;          // Dot index.
-    e_dot_mode  mode;           // Dot mode.
-    int         time_expire;    // Dot expire time.
-    int         time_tick;      // Dot next tick time.
-    int         time_rate;      // Dot tick rate.
-    int         force;          // Unmodified force.
     float       offense;        // Owner's offense.
     float       defense;        // target defense.
-    entity     *owner;          // Owner of dot effect.
     s_collision_attack attack;  // Attack structure.
+	s_damage_recursive *cursor;
 
-    // Loop through all DOT indexes.
-    for(index = 0; index < MAX_DOTS; index++)
-    {
-        // Populate local time vars.
-        time_expire =   target->dot_time[index];
-        time_tick   =   target->dot_cnt[index];
-        time_rate   =   target->dot_rate[index];
+	// Iterate target's recursive damage nodes.
+	for(cursor = ent->recursive_damage; cursor != NULL; cursor = cursor->next)
+	{
+		// If time has expired, destroy node and exit
+		// this loop iteration.
+		if (_time > cursor->time)
+		{
+			// If this is the head and there are no other
+			// recursive damage nodes, we need to delete
+			// the head AND set it to NULL. Otherwise, we
+			// only delete the node.
+			if (cursor == ent->recursive_damage && cursor->next == NULL)
+			{
+				free(cursor);
+				ent->recursive_damage = NULL;
+			}
+			else
+			{
+				free_damage_recursive_node(&ent->recursive_damage, cursor);
+			}				
 
-        // Is there a recursive damage expire time? If so we
-        // know there is a recursive damage active on this index.
-        if(time_expire)
-        {
-            // If time has expired, clear out other values
-            // and exit this iteration of the loop.
-            if(_time > time_expire)
-            {
-                target->dot[index]       = 0;
-                target->dot_atk[index]   = 0;
-                target->dot_cnt[index]   = 0;
-                target->dot_rate[index]  = 0;
-                target->dot_time[index]  = 0;
-                target->dot_force[index] = 0;
+			continue;
+		}
 
-                continue;
-            }
+		// If it is not yet time for a tick, exit
+		// this iteration of loop.
+		if (_time < cursor->tick)
+		{
+			continue;
+		}
 
-            // If it is not yet time for a tick, exit
-            // this iteration of loop.
-            if(!(_time >= time_tick))
-            {
-                continue;
-            }
+		// If target is not alive, exit this iteration of loop.
+		if (ent->energy_state.health_current <= 0)
+		{
+			continue;
+		}
 
-            // If target is not alive, exit this iteration of loop.
-            if(target->energy_status.health_current <= 0)
-            {
-                continue;
-            }
+		// Reset next tick time.
+		cursor->tick = _time + (cursor->rate * GAME_SPEED / 100);
 
-            // Reset next tick time.
-            target->dot_cnt[index] = _time + (time_rate * GAME_SPEED / 100);
+		// Does this recursive damage affect HP?
+		if (cursor->mode & DAMAGE_RECURSIVE_MODE_HP)
+		{
+			// Recursive HP Damage Logic:
+			//
+			// Normally it is preferable to apply takedamage(),
+			// any time we want to damage a target, but because
+			// it breaks grabs and would spam the HUD,
+			// takedamage() is not tenable for every tick
+			// of a recursive damage effect. However, we DO want
+			// the owner to get credit, grabs to be broken, HUD
+			// to react, etc., if the target is KO'd.
 
-            // Populate local recursive type and force vars.
-            mode  = target->dot[index];
-            force = target->dot_force[index];
+			// To handle both needs, we will first factor offense
+			// and defense manually to get a calculated force. If
+			// the calculated force is sufficient to KO target, and
+			// this recursive tick is allowed to KO, we will go ahead
+			// and apply takedamage() using the original recursive
+			// force (takedamage() automatically calculates offense
+			// and defense). This way the engine will treat KO tick as
+			// if it were a direct hit with all appropriate reactions
+			// and credit. Otherwise, we'll just subtract the calculated
+			// force directly from target's HP for a 'silent' damage effect.
 
-            // Does this recursive damage affect HP?
-            if(mode == DOT_MODE_HP
-                || mode == DOT_MODE_HP_MP
-                || mode == DOT_MODE_NON_LETHAL_HP
-                || mode == DOT_MODE_NON_LETHAL_HP_MP)
-            {
-                // Recursive HP Damage Logic:
-                //
-                // Normally it is preferable to apply takedamage(),
-                // any time we want to damage a target, but because
-                // it breaks grabs and would spam the HUD,
-                // takedamage() is not tenable for every tick
-                // of a recursive damage effect. However, we DO want
-                // the owner to get credit, grabs to be broken, HUD
-                // to react, etc., if the target is KO'd.
+			// Populate remaining local vars we'll need
+			// to apply recursive HP damage.
+			force_final = cursor->force;
 
-                // To handle both needs, we will first factor offense
-                // and defense manually to get a calculated force. If
-                // the calculated force is sufficient to KO target, and
-                // this recursive tick is allowed to KO, we will go ahead
-                // and apply takedamage() using the original recursive
-                // force (takedamage() automatically calculates offense
-                // and defense). This way the engine will treat KO tick as
-                // if it were a direct hit with all appropriate reactions
-                // and credit. Otherwise, we'll just subject the calculated
-                // force directly from target's HP for a 'silent' damage effect.
+			// Get owner's offense and target's defense
+			// factors for the recursive damage type.
+			offense = cursor->owner->offense_factors[cursor->type];
+			defense = ent->defense[cursor->type].factor;
 
-                // Populate remaining local vars we'll need
-                // to apply recursive HP damage.
-                owner        = target->dot_owner[index];
-                attack_type  = target->dot_atk[index];
-                force_final  = force;
+			// Calculate resulting force from any existing owner
+			// offense and target defense factors.
+			if (offense)
+			{
+				force_final = (int)(cursor->force * offense);
+			}
 
-                // Get owner's offense and target's defense
-                // factors for the recursive damage type.
-                offense      = owner->offense_factors[attack_type];
-                defense      = target->defense[attack_type].factor;
+			if (defense)
+			{
+				force_final = (int)(force_final * defense);
+			}
 
-                // Calculate resulting force from any existing owner
-                // offense and target defense factors.
-                if (offense)
-                {
-                    force_final = (int)(force * offense);
-                }
+			// Is calculated force enough to KO target?
+			// Is this recursive damage allowed to KO?
+			if (force_final >= ent->energy_state.health_current)
+			{
+				// Is this recursive damage allowed to KO?
+				if (!(cursor->mode & DAMAGE_RECURSIVE_MODE_NON_LETHAL))
+				{
+					// Does target have a takedamage structure? If so
+					// we can use takedamage() for the finishing damage.
+					// Otherwise it must be a none type or some other
+					// exceptional entity like a projectile. In that case
+					// we will simply kill it.
+					if (ent->takedamage)
+					{
+						// Populate attack structure with
+						// our recursive damage values.
+						attack = emptyattack;
+						attack.attack_type = cursor->type;
+						attack.attack_force = force_final;
+						attack.dropv = default_model_dropv;
 
-                if (defense)
-                {
-                    force_final = (int)(force_final * defense);
-                }
+						// Apply takedamage(). The engine will
+						// take care of everything else damage
+						// related.
+						ent->takedamage(cursor->owner, &attack, 0);
+					}
+					else
+					{
+						// Kill target instantly.
+						kill_entity(ent);
+					}
+				}
+				else
+				{
+					// Recursive damage is not allowed to KO.
+					// Just set target's HP to minimum value.
+					ent->energy_state.health_current = 1;
 
-                // Is calculated force enough to KO target?
-                // Is this recursive damage allowed to KO?
-                if(force_final >= target->energy_status.health_current)
-                {
-                    // Is this recursive damage allowed to KO?
-                    if(mode == DOT_MODE_HP || mode == DOT_MODE_HP_MP)
-                    {
-                        // Does target have a takedamage structure? If so
-                        // we can use takedamage() for the finishing damage.
-                        // Otherwise it must be a none type or some other
-                        // exceptional entity like a projectile. In that case
-                        // we will simply kill it.
-                        if(target->takedamage)
-                        {
-                            // Populate attack structure with
-                            // our recursive damage values.
-                            attack              = emptyattack;
-                            attack.attack_type  = attack_type;
-                            attack.attack_force = force;
-                            attack.dropv.y      = default_model_dropv.y;
-                            attack.dropv.x      = default_model_dropv.x;
-                            attack.dropv.z      = default_model_dropv.z;
+					// Execute the target's takedamage script.
+					execute_takedamage_script(ent, cursor->owner, &attack);
+				}
+			}
+			else
+			{
+				// Calculated damage is insufficient to KO.
+				// Subtract directly from target's HP.
+				ent->energy_state.health_current -= force_final;
 
-                            // Apply takedamage(). The engine will
-                            // take care of everything else damage
-                            // related.
-                            target->takedamage(owner, &attack, 0);
-                        }
-                        else
-                        {
-                            // Kill target instantly.
-                            kill_entity(target);
-                        }
-                    }
-                    else
-                    {
-                        // Recursive damage is not allowed to KO
-                        // just set target's HP to minimum value.
-                        target->energy_status.health_current = 1;
+				// Execute the target's takedamage script.
+				execute_takedamage_script(ent, cursor->owner, &attack);
+			}
+		}
 
-                        // Execute the target's takedamage script.
-                        execute_takedamage_script(target, owner, &attack);
-                    }
-                }
-                else
-                {
-                    // Calculated damage is insufficient to KO.
-                    // Subtract directly from target's HP.
-                    target->energy_status.health_current -= force_final;
+		// Does this recursive damage affect MP?
+		if (cursor->mode & DAMAGE_RECURSIVE_MODE_MP)
+		{
+			// Recursive MP Damage Logic:
 
-                    // Execute the target's takedamage script.
-                    execute_takedamage_script(target, owner, &attack);
-                }
+			// Could not be more simple. Subtract
+			// recursive force from MP. If MP would
+			// end with negative value, set 0.
 
-            }
+			// Subtract force from MP.
+			ent->energy_state.mp_current -= cursor->force;
 
-            // Does this recursive damage affect MP?
-            if(mode == DOT_MODE_MP
-               || mode == DOT_MODE_HP_MP
-               || mode == DOT_MODE_NON_LETHAL_HP_MP)
-            {
-                // Recursive HP Damage Logic:
-
-                // Could not be more simple. Subtract
-                // recursive force from MP. If MP would
-                // end with negative value, set 0.
-
-                // Subtract force from MP.
-                target->energy_status.mp_current -= force;
-
-                // Stabilize MP at 0.
-                if(target->energy_status.mp_current < 0)
-                {
-                    target->energy_status.mp_current = 0;
-                }
-            }
-        }
-    }
+			// Stabilize MP at 0.
+			if (ent->energy_state.mp_current < 0)
+			{
+				ent->energy_state.mp_current = 0;
+			}
+		}		
+	}    
 }
 
 void adjust_bind(entity *e)
@@ -21661,7 +21988,7 @@ void adjust_bind(entity *e)
 	// Run bind update script on *e (entity performing bind).
 	execute_on_bind_update_self_to_other(e, e->binding.ent, &e->binding);
 
-	if (e->binding.matching)
+	if (e->binding.match)
 	{
 		int				frame;
 		e_animations	animation;
@@ -21669,7 +21996,7 @@ void adjust_bind(entity *e)
 		// If a defined value is requested,
 		// use the binding member value.
 		// Otherwise use target's current value.
-		if (e->binding.matching & BINDING_MATCHING_ANIMATION_DEFINED)
+		if (e->binding.match & BIND_ANIMATION_DEFINED)
 		{
 			animation = e->binding.animation;
 		}
@@ -21687,7 +22014,7 @@ void adjust_bind(entity *e)
 			if (!validanim(e, animation))
 			{
 				// Don't have the animation? Kill ourself.
-				if (e->binding.matching & BINDING_MATCHING_ANIMATION_REMOVE)
+				if (e->binding.match & BIND_ANIMATION_REMOVE)
 				{
 					kill_entity(e);
 				}
@@ -21711,11 +22038,11 @@ void adjust_bind(entity *e)
 		// then set ADJUST_BIND_NO_FRAME_MATCH
 		// so frame matching logic is skipped.		
 		
-		if (e->binding.matching & BINDING_MATCHING_FRAME_DEFINED)
+		if (e->binding.match & BIND_ANIMATION_FRAME_DEFINED)
 		{
 			frame = e->binding.frame;
 		}
-		else if (e->binding.matching & BINDING_MATCHING_FRAME_TARGET)
+		else if (e->binding.match & BIND_ANIMATION_FRAME_TARGET)
 		{
 			frame = e->binding.ent->animpos;
 		}
@@ -21732,10 +22059,10 @@ void adjust_bind(entity *e)
 			{
 				// If we don't have the frame and frame kill flag is
 				// set, kill ourselves.
-				if (e->animation[e->animnum].numframes < frame)
+				if ((e->animation->numframes -1) < frame)
 				{
 
-					if (e->binding.matching & BINDING_MATCHING_FRAME_REMOVE)
+					if (e->binding.match & BIND_ANIMATION_FRAME_REMOVE)
 					{
 						kill_entity(e);
 
@@ -21785,21 +22112,21 @@ void adjust_bind(entity *e)
 //
 // Return an adjusted position for binding based
 // on positioning settings, offset, and current position.
-float binding_position(float position_default, float position_target, int offset, e_binding_positioning positioning)
+float binding_position(float position_default, float position_target, int offset, e_bind_mode positioning)
 {
 	switch (positioning)
 	{
-		case BINDING_POSITIONING_TARGET:
+		case BIND_MODE_TARGET:
 
 			return position_target + offset;
 			break;
 
-		case BINDING_POSITIONING_LEVEL:
+		case BIND_MODE_LEVEL:
 
 			return offset;
 			break;
 
-		case BINDING_POSITIONING_NONE:
+		case BIND_MODE_NONE:
 		default:
 
 			// Leave position as-is.
@@ -21863,7 +22190,7 @@ e_direction direction_adjustment(e_direction direction_default, e_direction dire
 //
 // Return true if the target entity has a valid
 // bind target and match for the override argument.
-int check_bind_override(entity *ent, e_binding_overriding overriding)
+int check_bind_override(entity *ent, e_bind_override overriding)
 {
     if(ent->binding.ent)
     {
@@ -21881,7 +22208,7 @@ void check_move(entity *e)
     float x, z;
     entity *plat, *tempself;
 
-    if((e->update_mark & 4))
+    if((e->update_mark & UPDATE_MARK_CHECK_MOVE))
     {
         return;
     }
@@ -21895,7 +22222,7 @@ void check_move(entity *e)
     if((plat = self->landed_on_platform) ) // on the platform?
     {
         //update platform first to get actual movex and movez
-        if(!(plat->update_mark & 4))
+        if(!(plat->update_mark & UPDATE_MARK_CHECK_MOVE))
         {
             check_move(plat);
         }
@@ -21957,7 +22284,7 @@ void check_move(entity *e)
     }
     self->movex = self->position.x - x;
     self->movez = self->position.z - z;
-    self->update_mark |= 4;
+    self->update_mark |= UPDATE_MARK_CHECK_MOVE;
     self = tempself;
 }
 
@@ -22027,7 +22354,7 @@ void update_ents()
         if(ent_list[i]->exists && _time != ent_list[i]->timestamp)// dont update fresh entity
         {
             self = ent_list[i];
-            self->update_mark = 0;
+            self->update_mark = UPDATE_MARK_NONE;
             if(level)
             {
                 check_lost();    // check lost caused by level scrolling or lifespan
@@ -22043,6 +22370,7 @@ void update_ents()
             }
             else
             {
+
                 execute_updateentity_script(self);// execute a script
                 if(!self->exists)
                 {
@@ -22190,12 +22518,10 @@ void display_ents()
                                                 (float)other->animation->platform[other->animpos][PLATFORM_Z] );
 
                         if(
-                            e->link &&
-                            ((e->modeldata.grabback &&
-                              !e->grabbing) ||
-                             (e->link->modeldata.grabback &&
-                              e->link->grabbing) ||
-                             e->grabbing)
+                            e->link														// Linked to entity.
+							&& ((e->modeldata.grabback && !e->grabbing)						// Have grab back AND not grabbing.
+								|| (e->link->modeldata.grabback && e->link->grabbing)		// Linked has grab back and is grabbing.
+								|| e->grabbing)												// Grabbing.
                         )
                         {
 
@@ -22234,14 +22560,11 @@ void display_ents()
                         z = HOLE_Z + e->modeldata.setlayer;    // Setlayer takes precedence
                     }
 
-                    //UT: commented this out, it seems to be some legacy code, ==2 doesn't make sense anymore
-                    //if(checkhole(e->position.x, e->position.z)==2) z = PANEL_Z-1;        // place behind panels
-
                     drawmethod = e->animation->drawmethods ? getDrawMethod(e->animation, e->animpos) : NULL;
-                    //drawmethod = e->animation->drawmethods?e->animation->drawmethods[e->animpos]:NULL;
-                    if(e->drawmethod.flag)
+                    
+					if(e->drawmethod->flag)
                     {
-                        drawmethod = &(e->drawmethod);
+                        drawmethod = (e->drawmethod);
                     }
                     if(!drawmethod)
                     {
@@ -22255,33 +22578,57 @@ void display_ents()
 
                     if(e->modeldata.alpha >= 1 && e->modeldata.alpha <= MAX_BLENDINGS)
                     {
-                        if(drawmethod->alpha < 0)
+                        if(drawmethod->alpha == BLEND_MODE_MODEL)
                         {
                             drawmethod->alpha = e->modeldata.alpha;
                         }
                     }
 
+					// Color selection. If drawmethod does not yet have a color table pointer, then
+					// we need to find one here.
                     if(!drawmethod->table)
                     {
-
-                        if(drawmethod->remap >= 1 && drawmethod->remap <= e->modeldata.maps_loaded)
+						// Drawmethod remap by index. Is there a value?
+                        if(drawmethod->remap >= 1)
                         {
-                            drawmethod->table = model_get_colourmap(&(e->modeldata), drawmethod->remap);
+							// Does the value fall within range of tables loaded? If so, use 
+							// value to locate the color table by index, and then populate
+							// drawmethod table value with the color table pointer.
+							if (drawmethod->remap <= e->modeldata.maps_loaded)
+							{
+								drawmethod->table = model_get_colourmap(&(e->modeldata), drawmethod->remap);
+							}                            
                         }
 
+						// Color selection by entity property. Does it have a value? Note that script functions
+						// and most text values in OpenBOR give the appearance this property is an integer index. 
+						// In actuality those functions accept an index, but immediately use it to locate a color 
+						// table pointer to populate this property. See ent_set_colourmap.
                         if(e->colourmap)
                         {
+							// We don't want to override drawmethods, so first check drawmethod 
+							// remap to make sure it is disabled (0 = force default, 1+ force alternates).
+							// If it is (dsiabled) then use property value to populate drawmethod table.
                             if(drawmethod->remap < 0)
                             {
                                 drawmethod->table = e->colourmap;
                             }
                         }
+
+						// If we haven't populated the drawmethod table yet, use
+						// model's default color table.
                         if(!drawmethod->table)
                         {
                             drawmethod->table = e->modeldata.palette;
                         }
+
+						// If globalmap is true, then author wants entity to use the current
+						// global color table.
                         if(e->modeldata.globalmap)
                         {
+							// If we are in a level and the level has a palette index specified,
+							// then use that index to find the color table pointer and populate
+							// drawmethod table. Otherwise, just get the global color table pointer.
                             if(level && current_palette)
                             {
                                 drawmethod->table = level->palettes[current_palette - 1];
@@ -22292,39 +22639,56 @@ void display_ents()
                             }
                         }
                     }
-                    if(e->dying)    // Code for doing dying flash
+
+					// If we have a dying remap, let's check for the dying flash effect.
+                    if(e->dying)
                     {
-                        if((e->energy_status.health_current <= e->per1 && e->energy_status.health_current > e->per2 && (_time % (GAME_SPEED / 5)) < (GAME_SPEED / 10)) ||
-                                (e->energy_status.health_current <= e->per2 && (_time % (GAME_SPEED / 10)) < (GAME_SPEED / 20)))
+						// This checks against both dying percentage thresholds and their associated 
+						// timing. If any pass, then we can move on and apply a flash.
+                        if((e->energy_state.health_current <= e->per1 && e->energy_state.health_current > e->per2 && (_time % (GAME_SPEED / 5)) < (GAME_SPEED / 10)) ||
+                                (e->energy_state.health_current <= e->per2 && (_time % (GAME_SPEED / 10)) < (GAME_SPEED / 20)))
                         {
-                            if(e->energy_status.health_current > 0 )
+							// Have any HP left?
+                            if(e->energy_state.health_current > 0 )
                             {
+								// Do we have a second dying map? If not, we just use map 1.
                                 if(e->dying2 > 0)
                                 {
-                                    if(e->energy_status.health_current <= e->per1 && e->energy_status.health_current > e->per2)
+									// If health is between percentage 1 and 2, use map 1. Otherwise
+									// use map 2.
+                                    if(e->energy_state.health_current <= e->per1 && e->energy_state.health_current > e->per2)
                                     {
                                         drawmethod->table = model_get_colourmap(&(e->modeldata), e->dying);
                                     }
-                                    else if(e->energy_status.health_current <= e->per2)
+                                    else if(e->energy_state.health_current <= e->per2)
                                     {
                                         drawmethod->table = model_get_colourmap(&(e->modeldata), e->dying2);
                                     }
                                 }
-                                else drawmethod->table = model_get_colourmap(&(e->modeldata), e->dying);
+								else
+								{
+									drawmethod->table = model_get_colourmap(&(e->modeldata), e->dying);
+								}
                             }
                         }
                     }
 
+					// Draw the entity according to its facing.
                     if(e->direction == DIRECTION_LEFT)
                     {
+						// Reverse the drawmethod flipx.
                         drawmethod->flipx = !drawmethod->flipx;
-                        if(drawmethod->fliprotate && drawmethod->rotate)
+                        
+						// If the flip rotate is enabled, reverse the
+						// rotation setting.
+						if(drawmethod->fliprotate && drawmethod->rotate)
                         {
                             drawmethod->rotate = 360 - drawmethod->rotate;
                         }
                     }
 
-                    if(!use_mirror || z > MIRROR_Z) // don't display if behind the mirror
+					// don't display if behind the mirror
+                    if(!use_mirror || z > MIRROR_Z) 
                     {
                         //just a simple check, doesn't work with mirror nor gfxshadow
                         if(drawmethod->clipw)
@@ -22542,7 +22906,7 @@ void display_ents()
 
             if(e->arrowon)    // Display the players image while invincible to indicate player number
             {
-                if(e->modeldata.parrow[(int)e->playerindex][0] && e->invincible == 1)
+                if(e->modeldata.parrow[(int)e->playerindex][0] && e->invincible & INVINCIBLE_INTANGIBLE)
                 {
                     spriteq_add_sprite((int)(e->position.x - scrx + e->modeldata.parrow[(int)e->playerindex][1]), (int)(e->position.z - e->position.y - scry + e->modeldata.parrow[(int)e->playerindex][2]), (int)e->position.z, e->modeldata.parrow[(int)e->playerindex][0], NULL, sortid * 2);
                 }
@@ -22644,7 +23008,7 @@ int normal_test_item(entity *ent, entity *item)
                    (isSubtypeWeapon(item) && !ent->weapent && ent->modeldata.weapon &&
                     ent->modeldata.numweapons >= item->modeldata.weapnum && ent->modeldata.weapon[item->modeldata.weapnum - 1] >= 0)
                    || (isSubtypeProjectile(item) && !ent->weapent)
-                   || (item->energy_status.health_current && (ent->energy_status.health_current < ent->modeldata.health) && ! isSubtypeProjectile(item) && ! isSubtypeWeapon(item))
+                   || (item->energy_state.health_current && (ent->energy_state.health_current < ent->modeldata.health) && ! isSubtypeProjectile(item) && ! isSubtypeWeapon(item))
                )
            );
 }
@@ -22731,16 +23095,14 @@ entity *find_ent_here(entity *exclude, float x, float z, int types, int (*test)(
 int set_idle(entity *ent)
 {
     ent->idling = IDLING_PREPARED;
-    ent->attacking = ATTACKING_INACTIVE;
+    ent->attacking = ATTACKING_NONE;
     ent->inpain = 0;
-    ent->rising = 0;
-    ent->riseattacking = 0;
-    ent->ducking = DUCK_INACTIVE;
+    ent->rising = RISING_NONE;
+    ent->ducking = DUCK_NONE;
     ent->inbackpain = 0;
     ent->falling = 0;
     ent->jumping = 0;
     ent->blocking = 0;
-    ent->blocking_pain = 0;
     common_idle_anim(ent);
     return 1;
 }
@@ -22753,18 +23115,16 @@ int set_death(entity *iDie, int type, int reset)
     if(iDie->blocking && validanim(iDie, ANI_CHIPDEATH))
     {
         ent_set_anim(iDie, ANI_CHIPDEATH, reset);
-        iDie->idling = IDLING_INACTIVE;
+        iDie->idling = IDLING_NONE;
         iDie->getting = 0;
         iDie->jumping = 0;
         iDie->charging = 0;
-        iDie->attacking = ATTACKING_INACTIVE;
+        iDie->attacking = ATTACKING_NONE;
         iDie->blocking = 0;
-        iDie->blocking_pain = 0;
         iDie->inpain = 0;
         iDie->falling = 0;
-        iDie->rising = 0;
-        iDie->riseattacking = 0;
-        iDie->ducking = DUCK_INACTIVE;
+        iDie->rising = RISING_NONE;
+        iDie->ducking = DUCK_NONE;
         return 1;
     }
 
@@ -22801,18 +23161,16 @@ int set_death(entity *iDie, int type, int reset)
         return 0;
     }
 
-    iDie->idling = IDLING_INACTIVE;
+    iDie->idling = IDLING_NONE;
     iDie->getting = 0;
     iDie->jumping = 0;
     iDie->charging = 0;
-    iDie->attacking = ATTACKING_INACTIVE;
+    iDie->attacking = ATTACKING_NONE;
     iDie->blocking = 0;
-    iDie->blocking_pain = 0;
     iDie->inpain = 0;
     iDie->falling = 0;
-    iDie->rising = 0;
-    iDie->riseattacking = 0;
-    iDie->ducking = DUCK_INACTIVE;
+    iDie->rising = RISING_NONE;
+    iDie->ducking = DUCK_NONE;
     if(iDie->frozen)
     {
         unfrozen(iDie);
@@ -22855,17 +23213,15 @@ int set_fall(entity *ent, entity *other, s_collision_attack *attack, int reset)
 
     ent->drop = 1;
     ent->inpain = 0;
-    ent->rising = 0;
-    ent->riseattacking = 0;
-    ent->idling = IDLING_INACTIVE;
+    ent->rising = RISING_NONE;
+    ent->idling = IDLING_NONE;
     ent->falling = 1;
     ent->jumping = 0;
-    ent->ducking = DUCK_INACTIVE;
+    ent->ducking = DUCK_NONE;
     ent->getting = 0;
     ent->charging = 0;
-    ent->attacking = ATTACKING_INACTIVE;
+    ent->attacking = ATTACKING_NONE;
     ent->blocking = 0;
-    ent->blocking_pain = 0;
     ent->nograb = 1;
 
     if(ent->frozen)
@@ -22918,9 +23274,9 @@ int set_rise(entity *iRise, int type, int reset)
     // Get up again
     iRise->drop = 0;
     iRise->falling = 0;
-    iRise->rising = 1;
-    iRise->riseattacking = 0;
-    iRise->projectile = 0;
+    iRise->rising |= RISING_RISE;
+    iRise->rising &= ~RISING_ATTACK;
+    iRise->projectile = BLAST_NONE;
     iRise->nograb = iRise->nograb_default; //iRise->nograb = 0;
     iRise->velocity.x = self->velocity.z = self->velocity.y = 0;
     iRise->modeldata.jugglepoints.current = iRise->modeldata.jugglepoints.max; //reset jugglepoints
@@ -22975,9 +23331,9 @@ int set_riseattack(entity *iRiseattack, int type, int reset)
     set_attacking(iRiseattack);
     iRiseattack->inpain = 0;
     iRiseattack->falling = 0;
-    iRiseattack->ducking = DUCK_INACTIVE;
-    iRiseattack->rising = 0;
-    iRiseattack->riseattacking = 1;
+    iRiseattack->ducking = DUCK_NONE;
+    iRiseattack->rising &= ~RISING_RISE;
+    iRiseattack->rising |= RISING_ATTACK;
     iRiseattack->drop = 0;
     iRiseattack->nograb = iRiseattack->nograb_default; //iRiseattack->nograb = 0;
     iRiseattack->modeldata.jugglepoints.current = iRiseattack->modeldata.jugglepoints.max; //reset jugglepoints
@@ -23040,10 +23396,9 @@ int set_blockpain(entity *ent, e_attack_types attack_type, int reset)
 
     ent->takeaction = common_block;
     set_blocking(self);
-    ent->blocking_pain = 1;
-    ent->rising = 0;
-    ent->riseattacking = 0;
-    ent->ducking = DUCK_INACTIVE;
+    ent->inpain = 1;
+    ent->rising = RISING_NONE;
+    ent->ducking = DUCK_NONE;
     ent_set_anim(ent, animblkpains[attack_type], reset);
     return 1;
 }
@@ -23130,28 +23485,25 @@ int set_pain(entity *iPain, int type, int reset)
         return 0;
     }
 
-	iPain->idling = IDLING_INACTIVE;
+	iPain->idling = IDLING_NONE;
 	iPain->falling = 0;
-	iPain->rising = 0;
-	iPain->riseattacking = 0;
-	iPain->ducking = DUCK_INACTIVE;
-	iPain->projectile = 0;
+	iPain->rising = RISING_NONE;
+	iPain->ducking = DUCK_NONE;
+	iPain->projectile = BLAST_NONE;
 	iPain->drop = 0;
-	iPain->attacking = ATTACKING_INACTIVE;
+	iPain->attacking = ATTACKING_NONE;
 	iPain->getting = 0;
 	iPain->charging = 0;
 	iPain->jumping = 0;
 	iPain->blocking = 0;
-	iPain->blocking_pain = 0;
 	iPain->inpain = 1;
 	if(iPain->frozen) unfrozen(iPain);
 
     if(pain == ANI_GRABBED)
     {
         iPain->inpain = 0;
-        iPain->rising = 0;
-        iPain->riseattacking = 0;
-        iPain->ducking = DUCK_INACTIVE;
+        iPain->rising = RISING_NONE;
+        iPain->ducking = DUCK_NONE;
         if ( iPain->inbackpain ) reset_backpain(iPain);
         iPain->inbackpain = 0;
     }
@@ -23413,7 +23765,7 @@ entity *block_find_target(int anim, int detect_adj)
                 && (attacker->modeldata.candamage & self->modeldata.type)
                 && (anim < 0 || (anim >= 0 && check_range_target_all(self, attacker, anim)))
                 && !attacker->dead //must be alive
-                && attacker->attacking != ATTACKING_INACTIVE
+                && attacker->attacking != ATTACKING_NONE
                 && attacker->animation->collision_attack && attacker->animation->collision_attack[attacker->animpos] && attacker->animation->collision_attack[attacker->animpos]->instance
                 && ( !attacker->animation->collision_attack[attacker->animpos]->instance[instance] || (attacker->animation->collision_attack[attacker->animpos]->instance[instance] && attacker->animation->collision_attack[attacker->animpos]->instance[instance]->no_block == 0) )
                 && (diffd = (diffx = diff(attacker->position.x, self->position.x)) + (diffz = diff(attacker->position.z, self->position.z))) >= min
@@ -23523,7 +23875,7 @@ entity *normal_find_target(int anim, int detect_adj)
 
 
         if(index < 0
-           || (index >= 0 && (!ent_list[index]->animation->vulnerable[ent_list[index]->animpos] || ent_list[index]->invincible == 1))
+           || (index >= 0 && (!ent_list[index]->animation->vulnerable[ent_list[index]->animpos] || ent_list[index]->invincible & INVINCIBLE_INTANGIBLE))
            // don't turn to the one on the back
            || ((self->position.x < ent_list[i]->position.x) == (self->direction == DIRECTION_RIGHT) && diffd < diffo)
           )
@@ -23844,8 +24196,8 @@ void common_jump()
         self->position.y = self->base;
 
         self->jumping = 0;
-        self->ducking = DUCK_INACTIVE;
-        self->attacking = ATTACKING_INACTIVE;
+        self->ducking = DUCK_NONE;
+        self->attacking = ATTACKING_NONE;
 
         if(!self->modeldata.runhold)
         {
@@ -23866,7 +24218,7 @@ void common_jump()
                 {
                     dust->spawntype = SPAWN_TYPE_DUST_LAND;
                     dust->base = self->position.y;
-                    dust->autokill = 2;
+                    dust->autokill |= AUTOKILL_ANIMATION_COMPLETE;
                     execute_onspawn_script(dust);
                 }
             }
@@ -23880,7 +24232,7 @@ void common_jump()
                 {
                     dust->spawntype = SPAWN_TYPE_DUST_LAND;
                     dust->base = self->position.y;
-                    dust->autokill = 2;
+                    dust->autokill |= AUTOKILL_ANIMATION_COMPLETE;
                     execute_onspawn_script(dust);
                 }
             }
@@ -23898,7 +24250,7 @@ void common_jump()
 //A.I. characters spawn
 void common_spawn()
 {
-    self->idling = IDLING_INACTIVE;
+    self->idling = IDLING_NONE;
     if(self->animating)
     {
         return;
@@ -23916,7 +24268,7 @@ void common_drop()
     }
     self->idling = IDLING_PREPARED;
     self->takeaction = NULL;
-    if(self->energy_status.health_current <= 0)
+    if(self->energy_state.health_current <= 0)
     {
         kill_entity(self);
     }
@@ -23950,7 +24302,7 @@ void doland()
 {
     self->velocity.x = self->velocity.z = 0;
     self->drop = 0;
-    self->projectile = 0;
+    self->projectile = BLAST_NONE;
     self->damage_on_landing.attack_force = 0;
     self->damage_on_landing.attack_type = ATK_NONE;
     if(validanim(self, ANI_LAND))
@@ -23973,25 +24325,23 @@ void common_fall()
     {
         return;
     }
+   
+    // Landed. Let's see if we could land
+	// safely.
+    if(self->projectile != BLAST_NONE)
+	{ 
+		if (self->projectile & BLAST_TOSS)
+		{
+			// damage_on_landing.attack_force==-2 means a player has pressed up+jump and has a land animation
+			if ((autoland == 1 && self->damage_on_landing.attack_force == ATTACK_FORCE_LAND_AUTO) || self->damage_on_landing.attack_force == ATTACK_FORCE_LAND_COMMAND)
+			{
+				// Added autoland option for landing
+				doland();
+				return;
+			}
 
-
-    //self->velocity.x = self->velocity.z;
-
-    // Landed
-    if(self->projectile > 0)
-    {
-        if(self->projectile == 2)
-        {
-            // damage_on_landing.attack_force==-2 means a player has pressed up+jump and has a land animation
-            if((autoland == 1 && self->damage_on_landing.attack_force == -1) || self->damage_on_landing.attack_force == -2)
-            {
-                // Added autoland option for landing
-                doland();
-                return;
-            }
-        }
-        //self->projectile = 0;
-        self->falling = 0;
+			self->falling = 0;
+		}
     }
 
     // Drop Weapon due to Enemy Falling.
@@ -24036,7 +24386,7 @@ void common_try_riseattack()
 void common_lie()
 {
     // Died?
-    if(self->energy_status.health_current <= 0)
+    if(self->energy_state.health_current <= 0)
     {
         if(self->modeldata.falldie == 2)
         {
@@ -24084,13 +24434,6 @@ void common_lie()
         return;
     }
 
-    //self->takeaction = common_rise;
-    // Get up again
-    //self->drop = 0;
-    //self->falling = 0;
-    //self->projectile = 0;
-    //self->velocity.x = self->velocity.z = self->velocity.y = 0;
-
     set_rise(self, self->last_damage_type, 0);
 }
 
@@ -24107,7 +24450,7 @@ void common_rise()
     {
         self->blink = self->modeldata.riseinv > 0;
         self->invinctime = _time + ABS(self->modeldata.riseinv);
-        self->invincible = 1;
+        self->invincible |= INVINCIBLE_INTANGIBLE;
     }
     set_idle(self);
 }
@@ -24123,9 +24466,8 @@ void common_pain()
     }
 
     self->inpain = 0;
-    self->rising = 0;
-    self->riseattacking = 0;
-    self->ducking = DUCK_INACTIVE;
+    self->rising = RISING_NONE;
+    self->ducking = DUCK_NONE;
     self->inbackpain = 0;
     if(self->link)
     {
@@ -24242,7 +24584,7 @@ void common_grab_check()
         dropweapon(1);
     }
 
-    self->attacking = ATTACKING_INACTIVE; //for checking
+    self->attacking = ATTACKING_NONE; //for checking
 
     rnum = rand32() & 31;
 
@@ -24299,7 +24641,7 @@ void common_grab()
     }
 
     self->takeaction = NULL;
-    self->attacking = ATTACKING_INACTIVE;
+    self->attacking = ATTACKING_NONE;
     memset(self->combostep, 0, sizeof(*self->combostep) * 5);
     set_idle(self);
 }
@@ -24331,29 +24673,73 @@ void common_get()
     set_idle(self);
 }
 
-// A.I. characters do the block
+// Continue or release block.
 void common_block()
 {
-    int hb1 = self->modeldata.holdblock && (self->modeldata.type & TYPE_PLAYER) &&
-              (!self->inpain || (self->modeldata.holdblock & 2)); //inpain = blockpain
-    int hb2 = ((player + self->playerindex)->keys & FLAG_SPECIAL) ;
+	// Player type with holdblock, also not in pain 
+	// or has post blockpain holdblock ability.
+    int hb1 = self->modeldata.holdblock 
+		&& (self->modeldata.type & TYPE_PLAYER) 
+		&& (!self->inpain || (self->modeldata.holdblock & 2));
+    
+	// Controlling player is holding special key.
+	int hb2 = ((player + self->playerindex)->keys & FLAG_SPECIAL);
 
-    if(self->inpain && (self->modeldata.holdblock & 2) && !self->animating && validanim(self, ANI_BLOCK))
+	// If we are in a block transition, let's see if it is finished.
+	// If it is, apply block animation.
+	if (self->animnum == ANI_BLOCKSTART && !self->animating)
+	{
+		ent_set_anim(self, ANI_BLOCK, 0);
+	}
+	
+	// In "Blockstun", at last frame of animation, and have holdblock
+	// after blockpain ability? Then we return to block.
+	//
+	// Otherwise, entity is a player with various other flags (see bh1) but
+	// not holding special key, or the entity has finihsed animation and 
+	// doesn't match any of the player/holdblock criteria (could be another 
+	// entity type, doesn't have holdblock ability, or controlling 
+	// player isn't holding special key). In any of those cases, we disable
+	// blocking flag and return to idle.
+    if(self->inpain 
+		&& (self->modeldata.holdblock & 2) 
+		&& !self->animating 
+		&& validanim(self, ANI_BLOCK))
     {
-        self->inpain = 0;
-        self->rising = 0;
-        self->riseattacking = 0;
-        self->inbackpain = 0;
-        ent_set_anim(self, ANI_BLOCK, 0);
+		self->inpain = 0;
+		self->rising = RISING_NONE;
+		self->inbackpain = 0;
+		ent_set_anim(self, ANI_BLOCK, 0);
     }
-    else if(
-        (hb1 && !hb2) ||
-        (!self->animating && (!hb1 || !hb2))
-    )
+    else if((hb1 && !hb2) 
+		|| (!self->animating && (!hb1 || !hb2)))
     {
-        self->blocking = 0;
-        self->takeaction = NULL;
-        set_idle(self);
+		// Can't release block until pain flag
+		// disables or the animation is complete. This 
+		// forces blockpain animations to finish before
+		// entity can act again.
+		if (!self->inpain || !self->animating)
+		{
+			if (self->animnum == ANI_BLOCKRELEASE && !self->animating)
+			{
+				self->blocking = 0;
+				self->takeaction = NULL;
+				set_idle(self);
+			}
+			else
+			{
+				if (validanim(self, ANI_BLOCKRELEASE))
+				{
+					ent_set_anim(self, ANI_BLOCKRELEASE, 0);
+				}
+				else
+				{
+					self->blocking = 0;
+					self->takeaction = NULL;
+					set_idle(self);
+				}				
+			}			
+		}
     }
 }
 
@@ -24483,7 +24869,7 @@ entity *drop_driver(entity *e)
 
 void checkdeath()
 {
-    if(self->energy_status.health_current > 0)
+    if(self->energy_state.health_current > 0)
     {
         return;
     }
@@ -24494,8 +24880,8 @@ void checkdeath()
         addscore(self->opponent->playerindex, self->modeldata.score);    // Add score to the player
     }
     self->nograb = 1;
-    self->idling = IDLING_INACTIVE;
-    self->ducking = DUCK_INACTIVE;
+    self->idling = IDLING_NONE;
+    self->ducking = DUCK_NONE;
 
     if(self->modeldata.diesound >= 0)
     {
@@ -24596,43 +24982,57 @@ void checkdamageeffects(s_collision_attack *attack)
 #define _steal          attack->steal
 #define _seal           attack->seal
 #define _sealtime       attack->sealtime
-#define _dot            attack->recursive->mode
-#define _dot_index      attack->recursive->index
-#define _dot_time       attack->recursive->time
-#define _dot_force      attack->recursive->force
-#define _dot_rate       attack->recursive->rate
-#define _staydown0      attack->staydown.rise
-#define _staydown1		attack->staydown.riseattack
+#define _staydown_rise			attack->staydown.rise
+#define _staydown_rise_attack	attack->staydown.riseattack
 
     entity *opp = self->opponent;
 
+	// Steal. Take HP from the entity and add it to attacker.
     if(_steal && opp && opp != self)
     {
-        if(self->energy_status.health_current >= attack->attack_force)
+		// If we have enough HP to withstand the attack, give attacker
+		// the same amount as attack force. Otherwise just give them 
+		// whatever HP we have left.
+		if(self->energy_state.health_current >= attack->attack_force)
         {
-            opp->energy_status.health_current += attack->attack_force;
+            opp->energy_state.health_current += attack->attack_force;
         }
         else
         {
-            opp->energy_status.health_current += self->energy_status.health_current;
+            opp->energy_state.health_current += self->energy_state.health_current;
         }
-        if(opp->energy_status.health_current > opp->modeldata.health)
+
+		// Cap the effect so attacker doesn't go over their maximum HP.
+        if(opp->energy_state.health_current > opp->modeldata.health)
         {
-            opp->energy_status.health_current = opp->modeldata.health;
+            opp->energy_state.health_current = opp->modeldata.health;
         }
     }
-    if(_freeze && !self->frozen)// && !self->owner && !self->modeldata.nomove)
+
+	// Freeze effect. If this is a freeze attack and we're
+	// not already frozen, apply a freeze effect and possibly 
+	// remap to freeze palette. If we ARE frozen, then
+	// unfreeze and knock down instead.
+    if(_freeze && !self->frozen)
     {
-        // New freeze attack - If not frozen, freeze entity
+        
+		// Set freeze status and expire time.
         self->frozen = 1;
         if(self->freezetime == 0)
         {
             self->freezetime = _time + _freezetime;
         }
+
+		// 2007-12-14 
+		// Caskey, Damon V.
+		//
+		// If opponents frozen map = -1 or only stun, then don't change the color map.
+
         if(_remap == -1 && self->modeldata.maps.frozen != -1)
         {
-            self->colourmap = model_get_colourmap(&(self->modeldata), self->modeldata.maps.frozen);    //12/14/2007 Damon Caskey: If opponents frozen map = -1 or only stun, then don't change the color map.
+            self->colourmap = model_get_colourmap(&(self->modeldata), self->modeldata.maps.frozen);    
         }
+
         self->drop = 0;
     }
     else if(self->frozen)
@@ -24641,54 +25041,51 @@ void checkdamageeffects(s_collision_attack *attack)
         self->drop = 1;
     }
 
+	// If we want to apply a remap without freezing (forcemap attack command) then
+	// set the map and expire time here.
     if(_remap > 0 && !_freeze)
     {
         self->maptime = _time + _maptime;
         self->colourmap = model_get_colourmap(&(self->modeldata), _remap);
     }
 
-    if(_seal)                                                                       //Sealed: Disable special moves.
+	// Disable specials. Apply seal (Any animation with 
+	// energycost > seal) is disabled and time to expire.
+    if(_seal)                                                                       
     {
-        self->sealtime  = _time + _sealtime;                                         //Set time to apply seal. No specials for you!
-        self->seal      = _seal;                                                    //Set seal. Any animation with energycost > seal is disabled.
+        self->sealtime  = _time + _sealtime;
+        self->seal      = _seal;
     }
 
-    if(attack->recursive)
-    {
-        if(_dot)                                                                        //dot: Damage over time effect.
-        {
-            self->dot_owner[_dot_index] = opp ? opp : self;			                    //dot owner.
-            self->dot[_dot_index]       = _dot;                                         //Mode: 1. HP (non lethal), 2. MP, 3. HP (non lethal) & MP, 4. HP, 5. HP & MP.
-            self->dot_time[_dot_index]  = _time + (_dot_time * GAME_SPEED / 100);        //Gametime dot will expire.
-            self->dot_force[_dot_index] = _dot_force;                                   //How much to dot each tick.
-            self->dot_rate[_dot_index]  = _dot_rate;                                    //Delay between dot ticks.
-            self->dot_atk[_dot_index]   = attack->attack_type;                          //dot attack type.
-        }
-    }
+	// Apply any recursive (damage over time) effects.
+	check_damage_recursive(self, opp, attack);
 
-
-
+	// Static enemies/nodrop enemies cannot be knocked down
     if(self->modeldata.nodrop)
     {
-        self->drop = 0;    // Static enemies/nodrop enemies cannot be knocked down
+        self->drop = 0;    
     }
 
+	// Always knock airborne entities down unless we're freezeing them
+	// or they are specfically immune to in air knockdowns.
     if(inair(self) && !self->frozen && self->modeldata.nodrop < 2)
     {
         self->drop = 1;
     }
 
+	// Immune to hit stun? No knockdown either.
     if(attack->no_pain)
     {
         self->drop = 0;
     }
 
-    self->projectile = _blast;
-
+	// If entity will be knocked down, let's apply knockdown specific effects here.
     if(self->drop)
     {
-        self->staydown.rise	= _staydown0;                                            //Staydown: Add to risetime until next rise.
-        self->staydown.riseattack   = _staydown1;
+		self->projectile = _blast;
+
+        self->staydown.rise	= _staydown_rise;                                            //Staydown: Add to risetime until next rise.
+        self->staydown.riseattack   = _staydown_rise_attack;
     }
 
 #undef _freeze
@@ -24699,13 +25096,93 @@ void checkdamageeffects(s_collision_attack *attack)
 #undef _steal
 #undef _seal
 #undef _sealtime
-#undef _dot
-#undef _dot_index
-#undef _dot_time
-#undef _dot_force
-#undef _dot_rate
-#undef _staydown0
-#undef _staydown1
+#undef _staydown_rise
+#undef _staydown_rise_attack
+}
+
+// Caskey, Damon V.
+// 2019-01-15
+//
+// If attack has any recursive effects, apply
+// them to entity accordingly.
+void check_damage_recursive(entity *ent, entity *other, s_collision_attack *attack)
+{
+	s_damage_recursive *previous;
+	s_damage_recursive *cursor;
+
+	// If the recursive head pointer is 
+	// null, there's no recursive, so exit.
+	if (!attack->recursive)
+	{
+		return;
+	}
+
+	// Let's see if we have a allocated any elements
+	// for recursive damage already.
+	if (ent->recursive_damage)
+	{
+		// Iterate over linked list and try to find an index
+		// member matching index member from attack. If we
+		// find one, exit loop - we can use the target pointer.
+		//
+		// If we don't find a match, we'll need to create a new
+		// node in the list and its pointer instead.
+
+		cursor = ent->recursive_damage;
+
+		while (cursor != NULL)
+		{
+			previous = cursor;
+			
+			// Found index match, so we can use the cursor
+			// as is. Get out now.
+			if (cursor->index == attack->recursive->index)
+			{
+				break;
+			}
+						
+			// Move to next node in list (if any).
+			cursor = cursor->next;
+		}
+		
+		// Add new node to list.
+		if (!cursor)
+		{
+			// Allocate the memory and get pointer.
+			cursor = malloc(sizeof(*cursor));
+
+			// Make sure there's no random garbage in our next pointer.
+			cursor->next = NULL;
+			
+			// Link previous node's next to our new node.
+			previous->next = cursor;
+		}
+	}
+	else
+	{
+		// Entity didn't have recursive damage at all.
+		// Let's allocate a head node.
+
+		// Allocate the memory and get pointer.
+		cursor = malloc(sizeof(*cursor));
+
+		// Make sure there's no random garbage in our next pointer.
+		cursor->next = NULL;
+
+		// Assign to entity.
+		ent->recursive_damage = cursor;
+	}		
+
+	// Now we have a target recursive element to populate with
+	// attack's recursive values.
+	cursor->tag = attack->recursive->tag;
+	cursor->mode = attack->recursive->mode;
+	cursor->index = attack->recursive->index;
+	cursor->time = _time + (attack->recursive->time * GAME_SPEED / 100);
+	cursor->force = attack->recursive->force;
+	cursor->rate = attack->recursive->rate;
+	cursor->type = attack->attack_type;
+	cursor->owner = other;
 }
 
 void checkdamagedrop(s_collision_attack *attack)
@@ -24745,15 +25222,15 @@ void checkmpadd()
 
     if(magic_type == 1 )
     {
-        other->energy_status.mp_current += other->modeldata.mprate;
+        other->energy_state.mp_current += other->modeldata.mprate;
 
-        if(other->energy_status.mp_current > other->modeldata.mp)
+        if(other->energy_state.mp_current > other->modeldata.mp)
         {
-            other->energy_status.mp_current = other->modeldata.mp;
+            other->energy_state.mp_current = other->modeldata.mp;
         }
-        else if(other->energy_status.mp_current < 0)
+        else if(other->energy_state.mp_current < 0)
         {
-            other->energy_status.mp_current = 0;
+            other->energy_state.mp_current = 0;
         }
     }
 }
@@ -24800,7 +25277,7 @@ int calculate_force_damage(entity *other, s_collision_attack *attack)
 
 void checkdamageonlanding()
 {
-    if (self->energy_status.health_current <= 0) return;
+    if (self->energy_state.health_current <= 0) return;
 
     if( (self->damage_on_landing.attack_force > 0 && !self->dead) )
     {
@@ -24815,7 +25292,7 @@ void checkdamageonlanding()
         if (attack.damage_on_landing.attack_type >= 0) attack.attack_type  = self->damage_on_landing.attack_type;
         else attack.attack_type  = ATK_LAND;
 
-        if (self->opponent && self->opponent->exists && !self->opponent->dead && self->opponent->energy_status.health_current > 0) other = self->opponent;
+        if (self->opponent && self->opponent->exists && !self->opponent->dead && self->opponent->energy_state.health_current > 0) other = self->opponent;
         else other = self;
 
         lasthit.confirm = 1;
@@ -24838,7 +25315,7 @@ void checkdamageonlanding()
         {
             return;
         }
-        if(self->toexplode == 2)
+        if(self->toexplode & EXPLODE_DETONATE)
         {
             return;
         }
@@ -24882,7 +25359,7 @@ void checkdamageonlanding()
             execute_didhit_script(other, self, &attack, 0);
         }
 
-        if (self->energy_status.health_current <= 0)
+        if (self->energy_state.health_current <= 0)
         {
             self->die_on_landing = 1;
         }
@@ -24908,7 +25385,7 @@ void checkdamageonlanding()
             if (attack.damage_on_landing.attack_type >= 0) attack.attack_type  = self->damage_on_landing.attack_type;
             else attack.attack_type  = ATK_LAND;
 
-            if (self->opponent && self->opponent->exists && !self->opponent->dead && self->opponent->energy_status.health_current > 0) other = self->opponent;
+            if (self->opponent && self->opponent->exists && !self->opponent->dead && self->opponent->energy_state.health_current > 0) other = self->opponent;
             else other = self;
             //##################
 
@@ -24931,36 +25408,61 @@ void checkdamageonlanding()
 
 void checkdamage(entity *other, s_collision_attack *attack)
 {
-    int force = attack->attack_force;
+	int		force;
+	bool	normal_damage;
 
+	// Get attack damage force after defense is applied.
     force = calculate_force_damage(other, attack);
 
-    self->energy_status.health_current -= force; //Apply damage.
+	// Damage does not return HP and comes from
+	// a normal source?
+	normal_damage = (attack->attack_type != ATK_BOSS_DEATH
+		&& attack->attack_type != ATK_ITEM
+		&& attack->attack_type != ATK_LIFESPAN
+		&& attack->attack_type != ATK_LOSE
+		&& attack->attack_type != ATK_TIMEOVER
+		&& attack->attack_type != ATK_PIT
+		&& force >= 0);
 
-    if (self->energy_status.health_current > self->modeldata.health)
+	// If we're invincible to normal damage sources, laugh it off.
+	if (self->invincible & INVINCIBLE_HP_NULLIFY && normal_damage)
+	{
+		force = 0;
+	}
+	
+	// Apply damage.
+    self->energy_state.health_current -= force;
+
+	// Cap negative damage (giving back HP) to maximum health.
+    if (self->energy_state.health_current > self->modeldata.health)
     {
-        self->energy_status.health_current = self->modeldata.health;    //Cap negative damage to max health.
+        self->energy_state.health_current = self->modeldata.health;    //Cap negative damage to max health.
     }
 
-    if(attack->no_kill && self->energy_status.health_current <= 0)
+    if(attack->no_kill && self->energy_state.health_current <= 0)
     {
-        self->energy_status.health_current = 1;
+        self->energy_state.health_current = 1;
     }
 
     // Execute the take damage script.
     execute_takedamage_script(self, other, attack);
 
-    if (self->energy_status.health_current <= 0)                                      //Health at 0?
+	// Attack meant to put health at 0?
+    if (self->energy_state.health_current <= 0)                                      
     {
-        if(!(self->position.y < PIT_DEPTH || self->lifespancountdown < 0)) //Not a pit death or countdown?
+		// Normal attack source?
+        if(normal_damage)
         {
-            if (self->invincible == 2)                          //Invincible type 2?
+			// Stop at minium HP?
+            if (self->invincible & INVINCIBLE_HP_MINIMUM)
             {
-                self->energy_status.health_current = 1;                               //Stop at 1hp.
+                self->energy_state.health_current = 1;
             }
-            else if(self->invincible == 3)                      //Invincible type 3?
+            
+			// Reset to maximum HP?
+			if(self->invincible & INVINCIBLE_HP_RESET)                      
             {
-                self->energy_status.health_current = self->modeldata.health;          //Reset to max health.
+                self->energy_state.health_current = self->modeldata.health;
             }
         }
 
@@ -25006,7 +25508,7 @@ int common_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
     {
         return 0;
     }
-    if(self->toexplode == 2)
+    if(self->toexplode & EXPLODE_DETONATE)
     {
         return 0;
     }
@@ -25016,9 +25518,9 @@ int common_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
         return 0;    // try to grab but failed, so return 0 means attack missed
     }
 
-    // set pain_time so it wont get hit too often
+    // set next_hit_time so it wont get hit too often
     // 2011/11/24 UT: move this to do_attack to merge with block code
-    //self->pain_time = _time + (attack->pain_time?attack->pain_time:(GAME_SPEED / 5));
+    //self->next_hit_time = _time + (attack->next_hit_time?attack->next_hit_time:(GAME_SPEED / 5));
     // set oppoent
     if(self != other)
     {
@@ -25096,14 +25598,16 @@ int common_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
     self->damage_on_landing.attack_type = ATK_NONE;
 
 	// White Dragon: fix damage_on_landing bug
-	if(self->die_on_landing && self->energy_status.health_current <= 0)
+	if(self->die_on_landing && self->energy_state.health_current <= 0)
 	{
 		self->modeldata.falldie = 1;
 	}
 
     // unlink due to being hit
-    if((self->opponent && self->opponent->grabbing != self) ||
-            self->dead || self->frozen || self->drop)
+    if((self->opponent && self->opponent->grabbing != self) // Have an opponent, but opponent is not grabbing me. 
+		|| self->dead										// Dead.
+		|| self->frozen										// Frozen. 
+		|| self->drop)										// Knocked down.
     {
         ent_unlink(self);
     }
@@ -25121,11 +25625,11 @@ int common_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
     }
 
     // New pain, fall, and death animations. Also, the nopain flag.
-    if(self->drop || self->energy_status.health_current <= 0)
+    if(self->drop || self->energy_state.health_current <= 0)
     {
         self->takeaction = common_fall;
         // Drop Weapon due to death.
-        if(self->modeldata.weaploss[0] == WEAPLOSS_TYPE_DEATH && self->energy_status.health_current <= 0)
+        if(self->modeldata.weaploss[0] == WEAPLOSS_TYPE_DEATH && self->energy_state.health_current <= 0)
         {
             dropweapon(1);
         }
@@ -25134,7 +25638,7 @@ int common_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
             dropweapon(1);
         }
 
-        if(self->energy_status.health_current <= 0 && self->modeldata.falldie == 1)
+        if(self->energy_state.health_current <= 0 && self->modeldata.falldie == 1)
         {
             self->velocity.x = self->velocity.z = self->velocity.y = 0;
             set_death(self, attack->attack_type, 0);
@@ -25207,7 +25711,7 @@ int common_try_runattack(entity *target)
 
     if(target)
     {
-        if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_INACTIVE))
+        if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_NONE))
         {
             return 0;
         }
@@ -25220,29 +25724,55 @@ int common_try_runattack(entity *target)
     return 0;
 }
 
+// Active blocking (nopassiveblock enabled). 
+//
+// AI can behave more like players when blocking. Normally AI
+// blocking is passive. IOW, it can only choose to block attacks
+// as they hit. This function allows the AI to initiate blocking 
+// preemptively the way players have to.
+// 
+// AI blocks if following conditions are met:
+//
+// 1. Entity has nopassiveblock enabled.
+// 2. Target is within range of BLOCK animation.
+// 3. Target is actively attacking.
+// 4. Blocking chance passes (same rules as passive blocking).
 int common_try_block(entity *target)
 {
-    if(self->modeldata.nopassiveblock == 0 ||
-            (rand32()&self->modeldata.blockodds) != 1 ||
-            !validanim(self, ANI_BLOCK))
-    {
-        return 0;
-    }
+	// Must have block animation.
+	if (!validanim(self, ANI_BLOCK))
+	{
+		return 0;
+	}
 
+	// Exit if we choose not to block. This function includes 
+	// the check for passive blocking flag.
+	if (!check_blocking_decision(self))
+	{	
+		return 0;
+	}
+
+	// If no current target, use block range.
     if(!target)
     {
-        target = block_find_target(ANI_BLOCK, 0);    // temporary fix, other wise ranges never work
+        target = block_find_target(ANI_BLOCK, 0);
     }
 
-    // no passive block, so block by himself :)
-    if(target && target->attacking != ATTACKING_INACTIVE)
+	// Still no target? Nothing to do, so exit.
+	if (!target)
+	{
+		return 0;
+	}
+
+    // If target is attacking, let's block and return true.
+    if(target->attacking != ATTACKING_NONE)
     {
-        self->takeaction = common_block;
-        set_blocking(self);
-        self->velocity.z = self->velocity.x = 0;
-        ent_set_anim(self, ANI_BLOCK, 0);
+		// Set up flags, action, and blocking animations.
+		do_active_block(self);
+
         return 1;
     }
+
     return 0;
 }
 
@@ -25365,7 +25895,7 @@ u32 recheck_nextattack(entity *target)
     {
         self->nextattack = 0;
     }
-    else if(target->attacking != ATTACKING_INACTIVE && self->nextattack > 4)
+    else if(target->attacking != ATTACKING_NONE && self->nextattack > 4)
     {
         self->nextattack -= 4;
     }
@@ -25393,7 +25923,7 @@ int common_try_normalattack(entity *target)
         return 0;
     }
 
-    if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_INACTIVE || target->takeaction == common_rise))
+    if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_NONE || target->takeaction == common_rise))
     {
         return 0;
     }
@@ -25420,7 +25950,7 @@ int common_try_normalattack(entity *target)
         self->takeaction = normal_prepare;
         self->velocity.z = self->velocity.x = 0;
         set_idle(self);
-        self->idling = IDLING_INACTIVE; // not really idle, in fact it is thinking
+        self->idling = IDLING_NONE; // not really idle, in fact it is thinking
         self->attacking = ATTACKING_PREPARED; // pre-attack, for AI-block check
         return 1;
     }
@@ -25456,7 +25986,7 @@ int common_try_jumpattack(entity *target)
                 return 0;
             }
 
-            if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_INACTIVE))
+            if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_NONE))
             {
                 rnum = -1;
             }
@@ -25489,7 +26019,7 @@ int common_try_jumpattack(entity *target)
                 return 0;
             }
 
-            if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_INACTIVE))
+            if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_NONE))
             {
                 rnum = -1;
             }
@@ -25525,7 +26055,7 @@ int common_try_jumpattack(entity *target)
                 {
                     dust->spawntype = SPAWN_TYPE_DUST_JUMP;
                     dust->base = self->position.y;
-                    dust->autokill = 2;
+                    dust->autokill |= AUTOKILL_ANIMATION_COMPLETE;
                     execute_onspawn_script(dust);
                 }
             }
@@ -25591,7 +26121,7 @@ int common_try_upper(entity *target)
         self->takeaction = upper_prepare;
         self->velocity.z = self->velocity.x = 0;
         set_idle(self);
-        self->idling = IDLING_INACTIVE; // not really idle, in fact it is thinking
+        self->idling = IDLING_NONE; // not really idle, in fact it is thinking
         self->attacking = ATTACKING_PREPARED; // pre-attack, for AI-block check
         return 1;
     }
@@ -25614,7 +26144,7 @@ int common_try_duckattack(entity *other)
         return 0;
     }
 
-    if(self->projectile > 0)
+    if(self->projectile != BLAST_NONE)
     {
         them = self->modeldata.projectilehit;
     }
@@ -25657,7 +26187,7 @@ int common_try_duckattack(entity *other)
     self->velocity.z = self->velocity.x = 0;
     // Don't waste any time!
     ent_set_anim(self, ANI_DUCKATTACK, 0);
-    //self->nextthink = _time + (int)(GAME_SPEED * 0.8);
+   
     return 1;
 }
 
@@ -25724,12 +26254,12 @@ void dothrow()
     }
 
     other->direction = self->direction;
-    other->projectile = 2;
+    other->projectile |= BLAST_TOSS;
     other->velocity.x = (other->direction == DIRECTION_RIGHT) ? (-other->modeldata.throwdist) : (other->modeldata.throwdist);
 
     if(autoland == 1 && validanim(other, ANI_LAND))
     {
-        other->damage_on_landing.attack_force = -1;
+        other->damage_on_landing.attack_force = ATTACK_FORCE_LAND_AUTO;
     }
     else
     {
@@ -25885,10 +26415,10 @@ int dograb(entity *attacker, entity *target, e_dograb_adjustcheck adjustcheck)
         /* Set flags. */
         set_opponent(target, attacker);
         ents_link(attacker, target);
-        target->attacking = ATTACKING_INACTIVE;
-        attacker->idling = IDLING_INACTIVE;
+        target->attacking = ATTACKING_NONE;
+        attacker->idling = IDLING_NONE;
         attacker->running = 0;
-        attacker->ducking = DUCK_INACTIVE;
+        attacker->ducking = DUCK_NONE;
         attacker->inbackpain = 0;
 
         /* Stop all movement. */
@@ -25904,7 +26434,7 @@ int dograb(entity *attacker, entity *target, e_dograb_adjustcheck adjustcheck)
             {
                 target->direction = !attacker->direction;
             }
-            attacker->attacking = ATTACKING_INACTIVE;
+            attacker->attacking = ATTACKING_NONE;
             memset(attacker->combostep, 0, 5 * sizeof(*attacker->combostep));
             target->stalltime = _time + GRAB_STALL;
             attacker->releasetime = _time + (GAME_SPEED / 2);
@@ -26593,7 +27123,7 @@ void common_attack_finish()
 
     target = self->opponent;
 
-    if(target && !self->modeldata.nomove && self->ducking == DUCK_INACTIVE && diff(self->position.x, target->position.x) < 80 && (rand32() & 3))
+    if(target && !self->modeldata.nomove && self->ducking == DUCK_NONE && diff(self->position.x, target->position.x) < 80 && (rand32() & 3))
     {
         self->takeaction = NULL;//common_runoff;
         self->destx = self->position.x > target->position.x ? MIN(self->position.x + 40, target->position.x + 80) : MAX(self->position.x - 40, target->position.x - 80);
@@ -26653,11 +27183,11 @@ void common_attack_proc()
             // Enemy was hit with a special so go ahead and subtract life
             if(check_energy(COST_CHECK_MP, self->animnum))
             {
-                self->energy_status.mp_current -= self->animation->energycost->cost;
+                self->energy_state.mp_current -= self->animation->energycost->cost;
             }
             else
             {
-                self->energy_status.health_current -= self->animation->energycost->cost;
+                self->energy_state.health_current -= self->animation->energycost->cost;
             }
         }
         self->tocost = 0;    // Life is subtracted, so go ahead and reset the flag
@@ -26674,7 +27204,7 @@ void common_attack_proc()
         subtract_shot();
         self->deduct_ammo = 0;
     }
-    self->attacking = ATTACKING_INACTIVE;
+    self->attacking = ATTACKING_NONE;
     // end of attack proc
     common_attack_finish();
 }
@@ -26910,11 +27440,11 @@ void adjust_walk_animation(entity *other)
     if(((self->direction == DIRECTION_RIGHT ? self->velocity.x < 0 : self->velocity.x > 0) && dir == 1) ||
             (dir == 2 && self->velocity.z > 0) || (dir == 3 && self->velocity.z < 0) )
     {
-        self->animating = -1;
+        self->animating = ANIMATING_REVERSE;
     }
     else
     {
-        self->animating = 1;
+        self->animating = ANIMATING_FORWARD;
     }
 }
 
@@ -26970,7 +27500,7 @@ int common_try_pick(entity *other)
 // it should be fairly slow due to the complicacy of terrain checking
 // and it doesn't always work since walking from wall to wall
 // requires jump.
-int astar(entity *ent, float destx, float destz, float step, s_axis_principal_float **wp)
+int astar(entity *ent, float destx, float destz, float step, s_axis_plane_lateral_float **wp)
 {
     int (*came_from)[astarw][astarh][2] = malloc(sizeof(*came_from));
     unsigned char (*closed)[astarw][astarh] = malloc(sizeof(*closed));
@@ -27269,7 +27799,7 @@ int checkpathblocked()
     float x, z, r;
     int aitype, wpc;
     entity *target;
-    s_axis_principal_float *wp;
+	s_axis_plane_lateral_float *wp;
     if(self->modeldata.nomove)
     {
         return 0;
@@ -27853,7 +28383,7 @@ int common_try_wander(entity *target, int dox, int doz)
         t = 2;
     }
 
-    if(behind && target->attacking != ATTACKING_INACTIVE)
+    if(behind && target->attacking != ATTACKING_NONE)
     {
         t += 5;
     }
@@ -27892,11 +28422,11 @@ int common_try_wander(entity *target, int dox, int doz)
     }
     else
     {
-        mindx = (!behind && target->attacking != ATTACKING_INACTIVE) ? grabd * 3 : grabd * 1.2;
+        mindx = (!behind && target->attacking != ATTACKING_NONE) ? grabd * 3 : grabd * 1.2;
     }
     mindz = grabd / 4;
 
-    mod = ((int)(_time / (videomodes.hRes / self->modeldata.speed)) + 1000 + self->energy_status.health_current / 3 + self->pathblocked + self->modeldata.aggression / 10) % 4;
+    mod = ((int)(_time / (videomodes.hRes / self->modeldata.speed)) + 1000 + self->energy_state.health_current / 3 + self->pathblocked + self->modeldata.aggression / 10) % 4;
     if(mod < 0)
     {
         mod = -mod;
@@ -27938,10 +28468,10 @@ int common_try_wander(entity *target, int dox, int doz)
                 self->destx = target->position.x - grabd;
                 break;
             case 1:
-                self->destx = target->position.x + videomodes.hRes * 0.4 + (self->energy_status.health_current / 3 % 20);
+                self->destx = target->position.x + videomodes.hRes * 0.4 + (self->energy_state.health_current / 3 % 20);
                 break;
             case 3:
-                self->destx = target->position.x - videomodes.hRes * 0.4 - (self->energy_status.health_current / 3 % 20);
+                self->destx = target->position.x - videomodes.hRes * 0.4 - (self->energy_state.health_current / 3 % 20);
                 break;
             }
             self->velocity.x = self->position.x > self->destx ? -self->modeldata.speed : self->modeldata.speed;
@@ -27981,10 +28511,10 @@ int common_try_wander(entity *target, int dox, int doz)
                 self->destz = target->position.z - grabd / 2;
                 break;
             case 2:
-                self->destz = target->position.z + MIN((PLAYER_MAX_Z - PLAYER_MIN_Z), videomodes.vRes) * 0.25 + (self->energy_status.health_current / 3 % 5);
+                self->destz = target->position.z + MIN((PLAYER_MAX_Z - PLAYER_MIN_Z), videomodes.vRes) * 0.25 + (self->energy_state.health_current / 3 % 5);
                 break;
             case 0:
-                self->destz = target->position.z - MIN((PLAYER_MAX_Z - PLAYER_MIN_Z), videomodes.vRes) * 0.25 - (self->energy_status.health_current / 3 % 5);
+                self->destz = target->position.z - MIN((PLAYER_MAX_Z - PLAYER_MIN_Z), videomodes.vRes) * 0.25 - (self->energy_state.health_current / 3 % 5);
                 break;
             }
             self->velocity.z = self->position.z > self->destz ? -self->modeldata.speed / 2 : self->modeldata.speed / 2;
@@ -28055,14 +28585,14 @@ void common_pickupitem(entity *other)
             self->velocity.x = self->velocity.z = 0; //stop moving
             ent_set_anim(self, ANI_GET, 0);
         }
-        if(other->energy_status.health_current)
+        if(other->energy_state.health_current)
         {
-            self->energy_status.health_current += other->energy_status.health_current;
-            if(self->energy_status.health_current > self->modeldata.health)
+            self->energy_state.health_current += other->energy_state.health_current;
+            if(self->energy_state.health_current > self->modeldata.health)
             {
-                self->energy_status.health_current = self->modeldata.health;
+                self->energy_state.health_current = self->modeldata.health;
             }
-            other->energy_status.health_current = 0;
+            other->energy_state.health_current = 0;
             //if(SAMPLE_GET >= 0) sound_play_sample(SAMPLE_GET, 0, savedata.effectvol,savedata.effectvol, 100);
         }
         // else if, TODO: other effects
@@ -28203,7 +28733,7 @@ int arrow_move()
 
     if(self->projectile_prime & PROJECTILE_PRIME_BASE_FLOOR)
     {
-        self->autokill = 2;
+        self->autokill |= AUTOKILL_ANIMATION_COMPLETE;
     }
 
     return 1;
@@ -28310,9 +28840,9 @@ int projectile_wall_deflect(entity *ent)
             richochet_velocity_x = ent->velocity.x * RICHOCHET_VELOCITY_X_FACTOR;
 
             ent->takeaction = common_fall;
-            ent->attacking = ATTACKING_INACTIVE;
-            ent->energy_status.health_current = 0;
-            ent->projectile = 0;
+            ent->attacking = ATTACKING_NONE;
+            ent->energy_state.health_current = 0;
+            ent->projectile = BLAST_NONE;
             ent->velocity.x = (ent->direction == DIRECTION_RIGHT) ? (-richochet_velocity_x) : richochet_velocity_x;
             ent->damage_on_landing.attack_force = 0;
             ent->damage_on_landing.attack_type = ATK_NONE;
@@ -28360,7 +28890,7 @@ void sort_invert_by_parent(entity *ent, entity *parent)
 // for common bomb types
 int bomb_move()
 {
-    if(inair(self) && self->toexplode == 1)
+    if(inair(self) && self->toexplode & EXPLODE_PREPARED)
     {
         if(self->direction == DIRECTION_LEFT)
         {
@@ -28393,7 +28923,7 @@ int bomb_move()
             sound_play_sample(self->modeldata.diesound, 0, savedata.effectvol, savedata.effectvol, 100);
         }
 
-        if(self->toexplode == 2 && validanim(self, ANI_ATTACK2))
+        if(self->toexplode & EXPLODE_DETONATE && validanim(self, ANI_ATTACK2))
         {
             ent_set_anim(self, ANI_ATTACK2, 0);    // If bomb never reaces the ground, play this
         }
@@ -28422,10 +28952,10 @@ int star_move()
     if(self->landed_on_platform || self->position.y <= self->base)
     {
         self->takeaction = common_lie;
-        self->energy_status.health_current = 0;
+        self->energy_state.health_current = 0;
         if(self->modeldata.nodieblink == 2)
         {
-            self->animating = 0;
+            self->animating = ANIMATING_NONE;
         }
     }
 
@@ -28500,7 +29030,7 @@ int common_move()
         if(self->custom_target == NULL || !self->custom_target->exists ) target = normal_find_target(-1, 0); // confirm the target again
         else target = self->custom_target;
 
-        other = ( (_time / GAME_SPEED + self->energy_status.health_current / 3 + 1000) % 15 < 10) ? normal_find_item() : NULL; // find an item
+        other = ( (_time / GAME_SPEED + self->energy_state.health_current / 3 + 1000) % 15 < 10) ? normal_find_item() : NULL; // find an item
         owner = self->parent;
 
         // temporary solution to turn off running if xdir is not set
@@ -28536,7 +29066,7 @@ int common_move()
 
         //turn back if we have a turn animation
         // TODO, make a function for ai script
-        if(self->direction != predir && validanim(self, ANI_TURN) && self->ducking == DUCK_INACTIVE)
+        if(self->direction != predir && validanim(self, ANI_TURN) && self->ducking == DUCK_NONE)
         {
             self->takeaction = common_turn;
             self->direction = !self->direction;
@@ -28995,7 +29525,13 @@ int ai_check_warp()
 
 int ai_check_lie()
 {
-    if(self->drop && self->position.y == self->base && !self->velocity.y && validanim(self, ANI_RISEATTACK) && ((rand32() % (self->stalltime - _time + 1)) < 3) && (self->energy_status.health_current > 0 && _time > self->staydown.riseattack_stall))
+    if(self->drop 
+		&& self->position.y == self->base 
+		&& !self->velocity.y 
+		&& validanim(self, ANI_RISEATTACK) 
+		&& ((rand32() % (self->stalltime - _time + 1)) < 3) 
+		&& (self->energy_state.health_current > 0 
+		&& _time > self->staydown.riseattack_stall))
     {
         common_try_riseattack();
         return 1;
@@ -29016,7 +29552,7 @@ int ai_check_grabbed()
 
 int ai_check_grab()
 {
-    if(self->grabbing && self->attacking == ATTACKING_INACTIVE)
+    if(self->grabbing && self->attacking == ATTACKING_NONE)
     {
         common_grab_check();
         return 1;
@@ -29062,7 +29598,7 @@ int ai_check_ducking()
         return 0;
     }
 
-    if(self->projectile > 0)
+    if(self->projectile & BLAST_ATTACK)
     {
         them = self->modeldata.projectilehit;
     }
@@ -29099,7 +29635,6 @@ int ai_check_ducking()
     {
         if (self->ducking & DUCK_ACTIVE)
         {
-            //self->nextthink = _time + (int)(GAME_SPEED * 1.0);
             return 1;
         }
         else
@@ -29112,7 +29647,7 @@ int ai_check_ducking()
             }
             if (!range_flag) return 0;
 
-            if(self->ducking == DUCK_INACTIVE)
+            if(self->ducking == DUCK_NONE)
             {
                 tryduck(self);
             }
@@ -29242,46 +29777,93 @@ void player_die()
 
     if(player[playerindex].lives <= 0)
     {
-        int all_p_alive = 0;
+        int all_p_ko = 0;
 
+		// Count number of KO'd (dead) players, by looping player
+		// indexes and incrementing when player does not have
+		// an entity.
         for(i = 0; i < MAX_PLAYERS; i++)
         {
-            if (!player[i].ent) ++all_p_alive;
+			if (!player[i].ent)
+			{
+				++all_p_ko;
+			}
         }
-        all_p_alive = (all_p_alive >= MAX_PLAYERS) ? 1 : 0;
+        
+		// If all players are KO'd, then KO count = 1.
+		// Otherwise, set it to 0.
+		all_p_ko = (all_p_ko >= MAX_PLAYERS) ? 1 : 0;
 
-        //if(!player[0].ent && !player[1].ent && !player[2].ent && !player[3].ent)
-        if(all_p_alive)
+		// All players KO'd?
+        if(all_p_ko)
         {
-            int all_p_nojoin = 0, all_p_nocredits = 0;
+			int all_p_nojoin = 0;
+			int all_p_nocredits = 0;
 
+			// All players NOT joining?
+			// Same logic as all player KO. 
             for(i = 0; i < MAX_PLAYERS; i++)
             {
-                if (!player[i].joining) ++all_p_nojoin;
+				if (!player[i].joining)
+				{
+					++all_p_nojoin;
+				}
             }
+
             all_p_nojoin = (all_p_nojoin >= MAX_PLAYERS) ? 1 : 0;
 
+			// All players out of credits?
+			// Same logic as all player KO.
             for(i = 0; i < MAX_PLAYERS; i++)
             {
-                if (player[i].credits < 1) ++all_p_nocredits;
-            }
+				if (player[i].credits < 1)
+				{
+					++all_p_nocredits;
+				}
+            }			
+
             all_p_nocredits = (all_p_nocredits >= MAX_PLAYERS) ? 1 : 0;
 
+			// Set the timer to a 10 second count down.
             timeleft = 10 * COUNTER_SPEED;
-            if(all_p_nojoin && ((!noshare && credits < 1) || all_p_nocredits) )
+
+			// No one joining in?
+            if(all_p_nojoin)
             {
-                timeleft = COUNTER_SPEED / 2;
+				// If the player can't continue, let's set the time over
+				// to end almost instantly so they won't have to wait.
+
+				// If noshare is enabled, credit shares are not allowed. Verify all 
+				// player individual credit supplies are empty. Otherwise credit
+				// shares are allowed, so verify pool of credits is empty.
+				if (noshare)
+				{
+					if (all_p_nocredits)
+					{
+						timeleft = COUNTER_SPEED / 2;
+					}					
+				}
+				else
+				{
+					if (credits < 1)
+					{
+						timeleft = COUNTER_SPEED / 2;
+					}
+				}
             }
         }
+
         if(self->modeldata.weaploss[0] == WEAPLOSS_TYPE_CHANGE)
         {
             player[playerindex].weapnum = level->setweap;
         }
+
         if(nomaxrushreset[4] != 2)
         {
             nomaxrushreset[playerindex] = 0;
         }
-        return;
+        
+		return;
     }
     else
     {
@@ -29331,14 +29913,14 @@ int check_energy(e_cost_check which, int ani)
     // return false.
     if(type & (TYPE_ENEMY  | TYPE_NPC))
     {
-        if(check_bind_override(self, BINDING_OVERRIDING_SPECIAL_AI))
+        if(check_bind_override(self, BIND_OVERRIDE_SPECIAL_AI))
         {
             return FALSE;
         }
     }
     else if(type & TYPE_PLAYER)
     {
-        if(check_bind_override(self, BINDING_OVERRIDING_SPECIAL_PLAYER))
+        if(check_bind_override(self, BIND_OVERRIDE_SPECIAL_PLAYER))
         {
             return FALSE;
         }
@@ -29365,10 +29947,10 @@ int check_energy(e_cost_check which, int ani)
                 if(validanim(self, ani) &&										    //Validate the animation one more time.
                         ((which == COST_CHECK_MP &&			                    //Check magic validity
                           (energycost.mponly != COST_TYPE_HP_ONLY) &&
-                          (self->energy_status.mp_current >= energycost.cost)) ||
+                          (self->energy_state.mp_current >= energycost.cost)) ||
                          (which == COST_CHECK_HP &&			                    //Check health validity
                           (energycost.mponly != COST_TYPE_MP_ONLY) &&
-                          (self->energy_status.health_current > energycost.cost))))
+                          (self->energy_state.health_current > energycost.cost))))
                 {
                     result = TRUE;
                 }
@@ -29590,11 +30172,11 @@ int check_special()
             {
                 if(check_energy(COST_CHECK_MP, ANI_SPECIAL))
                 {
-                    self->energy_status.mp_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
+                    self->energy_state.mp_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
                 }
                 else
                 {
-                    self->energy_status.health_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
+                    self->energy_state.health_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
                 }
             }
         }
@@ -29690,7 +30272,7 @@ void common_grabattack()
         return;
     }
 
-    self->attacking = ATTACKING_INACTIVE;
+    self->attacking = ATTACKING_NONE;
 
     if(!(self->combostep[0] || self->combostep[1] ||
             self->combostep[2] || self->combostep[3] ||
@@ -29703,7 +30285,7 @@ void common_grabattack()
     {
         self->takeaction = common_grab;
         self->link->takeaction = common_grabbed;
-        self->attacking = ATTACKING_INACTIVE;
+        self->attacking = ATTACKING_NONE;
         ent_set_anim(self, ANI_GRAB, 0);
         set_pain(self->link, -1, 0);
         update_frame(self, self->animation->numframes - 1);
@@ -29750,7 +30332,7 @@ void common_idle()
         return;
     }
     self->takeaction = NULL;
-    self->attacking = ATTACKING_INACTIVE;
+    self->attacking = ATTACKING_NONE;
     self->idling = IDLING_PREPARED;
     common_idle_anim(self);
 }
@@ -29764,7 +30346,7 @@ void tryduck(entity *ent)
         ent->takeaction = common_preduck;
         ent->velocity.x = ent->velocity.z = 0;
         ent->ducking = DUCK_PREPARED;
-        ent->idling = IDLING_INACTIVE;
+        ent->idling = IDLING_NONE;
         ent_set_anim(ent, ANI_DUCKING, 0);
     }
     else
@@ -29782,7 +30364,7 @@ void tryduckrise(entity *ent)
         ent->takeaction = common_idle;
         ent->velocity.x = ent->velocity.z = 0;
         ent->ducking = DUCK_RISE;
-        ent->idling = IDLING_INACTIVE;
+        ent->idling = IDLING_NONE;
         ent_set_anim(ent, ANI_DUCKRISE, 0);
     }
     else
@@ -29821,13 +30403,13 @@ void tryjump(float jumpv, float jumpx, float jumpz, int animation_id)
     self->jump.velocity.z = jumpz;
     self->jump.animation_id = animation_id;
 
-    self->ducking = DUCK_INACTIVE;
+    self->ducking = DUCK_NONE;
     if(validanim(self, ANI_JUMPDELAY))
     {
         self->takeaction = common_prejump;
         self->velocity.x = self->velocity.z = 0;
 
-        self->idling = IDLING_INACTIVE;
+        self->idling = IDLING_NONE;
         ent_set_anim(self, ANI_JUMPDELAY, 0);
     }
     else
@@ -29856,7 +30438,7 @@ void dojump(float jumpv, float jumpx, float jumpz, int animation_id)
         {
             dust->spawntype = SPAWN_TYPE_DUST_JUMP;
             dust->base = self->position.y;
-            dust->autokill = 2;
+            dust->autokill |= AUTOKILL_ANIMATION_COMPLETE;
             execute_onspawn_script(dust);
         }
     }
@@ -29915,16 +30497,16 @@ void didfind_item(entity *other)
             sound_play_sample(SAMPLE_GET2, 0, savedata.effectvol, savedata.effectvol, 100);
         }
     }
-    else if(other->energy_status.health_current)
+    else if(other->energy_state.health_current)
     {
-        self->energy_status.health_current += other->energy_status.health_current;
+        self->energy_state.health_current += other->energy_state.health_current;
 
-        if(self->energy_status.health_current > self->modeldata.health)
+        if(self->energy_state.health_current > self->modeldata.health)
         {
-            self->energy_status.health_current = self->modeldata.health;
+            self->energy_state.health_current = self->modeldata.health;
         }
 
-        other->energy_status.health_current = 0;
+        other->energy_state.health_current = 0;
 
         if(SAMPLE_GET >= 0)
         {
@@ -29933,14 +30515,14 @@ void didfind_item(entity *other)
     }
     else if(other->modeldata.mp)
     {
-        self->energy_status.mp_current += other->modeldata.mp;
+        self->energy_state.mp_current += other->modeldata.mp;
 
-        if(self->energy_status.mp_current > self->modeldata.mp)
+        if(self->energy_state.mp_current > self->modeldata.mp)
         {
-            self->energy_status.mp_current = self->modeldata.mp;
+            self->energy_state.mp_current = self->modeldata.mp;
         }
 
-        other->energy_status.mp_current = 0;
+        other->energy_state.mp_current = 0;
         sound_play_sample(SAMPLE_GET, 0, savedata.effectvol, savedata.effectvol, 100);
     }
     else if(stricmp(other->modeldata.name, "Time") == 0)
@@ -29955,7 +30537,7 @@ void didfind_item(entity *other)
     else if(other->modeldata.makeinv)
     {
         // Mar 2, 2005 - New item makes player invincible
-        self->invincible = 1;
+        self->invincible |= INVINCIBLE_INTANGIBLE;
         self->invinctime = _time + ABS(other->modeldata.makeinv);
         self->blink = (other->modeldata.makeinv > 0);
 
@@ -30053,7 +30635,8 @@ void player_fall_check()
 {
     if(autoland != 2 && (player[self->playerindex].keys & (FLAG_MOVEUP | FLAG_JUMP)) == (FLAG_MOVEUP | FLAG_JUMP))
     {
-        self->damage_on_landing.attack_force = -2; // mark it, so we will play land animation when hit the ground
+		// mark it, so we will play land animation when hit the ground.
+        self->damage_on_landing.attack_force = ATTACK_FORCE_LAND_COMMAND; 
     }
 }
 
@@ -30115,11 +30698,11 @@ void player_grab_check()
         }
     }
 
-    self->attacking = ATTACKING_INACTIVE; //for checking
+    self->attacking = ATTACKING_NONE; //for checking
     self->grabwalking = 0;
-    if(self->direction == DIRECTION_RIGHT ?
-            (player[self->playerindex].keys & FLAG_MOVELEFT) :
-            (player[self->playerindex].keys & FLAG_MOVERIGHT))
+
+	// Move key opposite vs. dicretion?
+    if(self->direction == DIRECTION_RIGHT ? (player[self->playerindex].keys & FLAG_MOVELEFT) : (player[self->playerindex].keys & FLAG_MOVERIGHT))
     {
         // initiating grabturn
         if(self->modeldata.grabturn)
@@ -30386,7 +30969,7 @@ void player_grab_check()
         self->grabwalking = 1;
     }
 
-    if(self->attacking != ATTACKING_INACTIVE)
+    if(self->attacking != ATTACKING_NONE)
     {
         self->releasetime = _time + (GAME_SPEED / 2);    // reset releasetime when do collision
     }
@@ -30484,7 +31067,7 @@ void player_jump_check()
                 {
                     if(!healthcheat)
                     {
-                        self->energy_status.mp_current -= self->modeldata.animation[ANI_JUMPSPECIAL]->energycost->cost;
+                        self->energy_state.mp_current -= self->modeldata.animation[ANI_JUMPSPECIAL]->energycost->cost;
                     }
                     candospecial = 1;
                 }
@@ -30492,7 +31075,7 @@ void player_jump_check()
                 {
                     if(!healthcheat)
                     {
-                        self->energy_status.health_current -= self->modeldata.animation[ANI_JUMPSPECIAL]->energycost->cost;
+                        self->energy_state.health_current -= self->modeldata.animation[ANI_JUMPSPECIAL]->energycost->cost;
                     }
                     candospecial = 1;
                 }
@@ -30620,9 +31203,8 @@ void player_pain_check()
     if(player_check_special())
     {
         self->inpain = 0;
-        self->rising = 0;
-        self->riseattacking = 0;
-        self->ducking = DUCK_INACTIVE;
+        self->rising = RISING_NONE;
+        self->ducking = DUCK_NONE;
         self->inbackpain = 0;
     }
 }
@@ -30633,7 +31215,7 @@ void player_lie_check()
     if(validanim(self, ANI_RISEATTACK) &&
             (player[self->playerindex].playkeys & FLAG_ATTACK) &&
             (player[self->playerindex].keys & FLAG_MOVEUP) &&
-            (self->energy_status.health_current > 0 && _time > self->staydown.riseattack_stall))
+            (self->energy_state.health_current > 0 && _time > self->staydown.riseattack_stall))
     {
         player[self->playerindex].playkeys &= ~FLAG_ATTACK;
         if((player[self->playerindex].keys & FLAG_MOVELEFT))
@@ -30679,20 +31261,20 @@ int check_costmove(int s, int fs, int jumphack)
             {
                 if(check_energy(COST_CHECK_MP, s))
                 {
-                    self->energy_status.mp_current -= self->modeldata.animation[s]->energycost->cost;
+                    self->energy_state.mp_current -= self->modeldata.animation[s]->energycost->cost;
                 }
                 else
                 {
-                    self->energy_status.health_current -= self->modeldata.animation[s]->energycost->cost;
+                    self->energy_state.health_current -= self->modeldata.animation[s]->energycost->cost;
                 }
             }
         }
 
+		self->running = 0;
         self->velocity.x = self->velocity.z = 0;
         set_attacking(self);
         self->inpain = 0;
-        self->rising = 0;
-        self->riseattacking = 0;
+        self->rising = RISING_NONE;
         self->inbackpain = 0;
         memset(self->combostep, 0, sizeof(*self->combostep) * 5);
         ent_unlink(self);
@@ -30867,14 +31449,14 @@ void player_think()
     }
 
     // falling? check for landing
-    if(self->projectile == 2)
+    if(self->projectile & BLAST_TOSS)
     {
         player_fall_check();
         goto endthinkcheck;
     }
 
     // grab section, dont move if still animating
-    if(self->grabbing && self->attacking == ATTACKING_INACTIVE && self->takeaction != common_throw_wait)
+    if(self->grabbing && self->attacking == ATTACKING_NONE && self->takeaction != common_throw_wait)
     {
         player_grab_check();
         goto endthinkcheck;
@@ -30911,7 +31493,7 @@ void player_think()
     /*if(self->modeldata.subject_to_platform > 0 && (heightvar = self->animation->size.y ? self->animation->size.y : self->modeldata.size.y) &&
             validanim(self, ANI_DUCK) && check_platform_between(self->position.x, self->position.z, self->position.y, self->position.y + heightvar, self))
     {
-        self->idling = IDLING_INACTIVE;
+        self->idling = IDLING_NONE;
         self->ducking = DUCK_ACTIVE;
         self->takeaction = common_stuck_underneath;
         ent_set_anim(self, ANI_DUCK, 0);
@@ -30948,7 +31530,7 @@ void player_think()
             pl->playkeys &= ~FLAG_MOVEUP;
             self->takeaction = common_dodge;
             self->combostep[0] = 0;
-            self->idling = IDLING_INACTIVE;
+            self->idling = IDLING_NONE;
             self->velocity.z = -self->modeldata.speed * 1.75;
             self->velocity.x = 0;// OK you can use jumpframe to modify this anyway
             ent_set_anim(self, ANI_DODGE, 0);
@@ -30984,7 +31566,7 @@ void player_think()
             pl->playkeys &= ~FLAG_MOVEDOWN;
             self->takeaction = common_dodge;
             self->combostep[0] = 0;
-            self->idling = IDLING_INACTIVE;
+            self->idling = IDLING_NONE;
             self->velocity.z = self->modeldata.speed * 1.75;
             self->velocity.x = 0;
             ent_set_anim(self, ANI_DODGE, 0);
@@ -31069,15 +31651,15 @@ void player_think()
             }
         }
 
-        if(validanim(self, ANI_BLOCK) && notinair)   // New block code for players
+		// Blocking.
+        if(validanim(self, ANI_BLOCK) && notinair)
         {
             pl->playkeys &= ~FLAG_SPECIAL;
-            self->takeaction = common_block;
-            self->velocity.x = self->velocity.z = 0;
-            set_blocking(self);
-            self->combostep[0] = 0;
-            ent_set_anim(self, ANI_BLOCK, 0);
-            goto endthinkcheck;
+
+			// Set up flags, action, and block animations.
+			do_active_block(self);
+
+			goto endthinkcheck;
         }
     }
 
@@ -31197,7 +31779,7 @@ void player_think()
         }
         else if(perform_atchain())
         {
-            if(SAMPLE_PUNCH >= 0 && self->attacking != ATTACKING_INACTIVE)
+            if(SAMPLE_PUNCH >= 0 && self->attacking != ATTACKING_NONE)
             {
                 sound_play_sample(SAMPLE_PUNCH, 0, savedata.effectvol, savedata.effectvol, 100);
             }
@@ -31354,7 +31936,7 @@ void player_think()
 
     }
 
-    if(PLAYER_MIN_Z != PLAYER_MAX_Z && self->ducking == DUCK_INACTIVE)
+    if(PLAYER_MIN_Z != PLAYER_MAX_Z && self->ducking == DUCK_NONE)
     {
         // More of a platform feel
         if(pl->keys & FLAG_MOVEUP)
@@ -31402,13 +31984,13 @@ void player_think()
             self->velocity.z = 0;
         }
     }
-    else if(self->ducking == DUCK_INACTIVE && validanim(self, ANI_DUCK) && pl->keys & FLAG_MOVEDOWN && notinair)
+    else if(self->ducking == DUCK_NONE && validanim(self, ANI_DUCK) && pl->keys & FLAG_MOVEDOWN && notinair)
     {
         tryduck(self);
         goto endthinkcheck;
     }
 
-    if(pl->keys & FLAG_MOVELEFT && self->ducking == DUCK_INACTIVE)
+    if(pl->keys & FLAG_MOVELEFT && self->ducking == DUCK_NONE)
     {
         if(self->direction == DIRECTION_RIGHT)
         {
@@ -31463,7 +32045,7 @@ void player_think()
             self->velocity.x = -self->modeldata.speed;
         }
     }
-    else if(pl->keys & FLAG_MOVERIGHT && self->ducking == DUCK_INACTIVE)
+    else if(pl->keys & FLAG_MOVERIGHT && self->ducking == DUCK_NONE)
     {
         if(self->direction == DIRECTION_LEFT)
         {
@@ -31623,6 +32205,7 @@ void player_think()
 
         break;
     default:
+
         if(self->idling)
         {
             common_idle_anim(self);
@@ -31774,7 +32357,7 @@ void drop_all_enemies()
     for(i = 0; i < ent_max; i++)
     {
         if(ent_list[i]->exists &&
-                ent_list[i]->energy_status.health_current > 0 &&
+                ent_list[i]->energy_state.health_current > 0 &&
                 (ent_list[i]->modeldata.type & TYPE_ENEMY) &&
                 !ent_list[i]->owner &&    // Don't want to knock down a projectile
                 !ent_list[i]->frozen &&    // Don't want to unfreeze a frozen enemy
@@ -31782,8 +32365,8 @@ void drop_all_enemies()
                 !ent_list[i]->modeldata.nodrop &&
                 validanim(ent_list[i], ANI_FALL) )
         {
-            ent_list[i]->attacking = ATTACKING_INACTIVE;
-            ent_list[i]->projectile = 0;
+            ent_list[i]->attacking = ATTACKING_NONE;
+            ent_list[i]->projectile = BLAST_NONE;
             ent_list[i]->takeaction = common_fall;//enemy_fall;
             ent_list[i]->damage_on_landing.attack_force = 0;
             ent_list[i]->damage_on_landing.attack_type = ATK_NONE;
@@ -31818,21 +32401,18 @@ void kill_all_enemies()
 
     attack = emptyattack;
 	attack.attack_type = ATK_BOSS_DEATH;
-    //attack.attack_type = max_attack_types - 1;
-    attack.dropv.y = default_model_dropv.y;
-    attack.dropv.x = default_model_dropv.x;
-    attack.dropv.z = default_model_dropv.z;
+	attack.dropv = default_model_dropv;
 
     tmpself = self;
     for(i = 0; i < ent_max; i++)
     {
         if(  ent_list[i]->exists
-                && ent_list[i]->energy_status.health_current > 0
+                && ent_list[i]->energy_state.health_current > 0
                 && (ent_list[i]->modeldata.type & TYPE_ENEMY)
                 && ent_list[i]->takedamage)
         {
             self = ent_list[i];
-            attack.attack_force = self->energy_status.health_current;
+            attack.attack_force = self->energy_state.health_current;
             self->takedamage(tmpself, &attack, 0);
             self->dead = 1;
         }
@@ -31858,7 +32438,7 @@ void smart_bomb(entity *e, s_collision_attack *attack)    // New method for smar
     {
         if( ent_list[i]->exists
                 && ent_list[i] != e
-                && ent_list[i]->energy_status.health_current > 0
+                && ent_list[i]->energy_state.health_current > 0
                 && (ent_list[i]->modeldata.type & (e->modeldata.hostile)))
         {
             self = ent_list[i];
@@ -31870,8 +32450,8 @@ void smart_bomb(entity *e, s_collision_attack *attack)    // New method for smar
             }
             else
             {
-                self->energy_status.health_current -= attack->attack_force;
-                if(self->energy_status.health_current <= 0)
+                self->energy_state.health_current -= attack->attack_force;
+                if(self->energy_state.health_current <= 0)
                 {
                     kill_entity(self);
                 }
@@ -31887,11 +32467,11 @@ void smart_bomb(entity *e, s_collision_attack *attack)    // New method for smar
         {
             if(check_energy(COST_CHECK_MP, ANI_SPECIAL))
             {
-                self->energy_status.mp_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
+                self->energy_state.mp_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
             }
             else
             {
-                self->energy_status.health_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
+                self->energy_state.health_current -= self->modeldata.animation[ANI_SPECIAL]->energycost->cost;
             }
         }
     }
@@ -31928,16 +32508,16 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
         // then we'll type this as an index spawn source.
         if(index < 0)
         {
-            e->projectile_prime = PROJECTILE_PRIME_SOURCE_INDEX;
+            e->projectile_prime |= PROJECTILE_PRIME_SOURCE_INDEX;
         }
         else
         {
-            e->projectile_prime = PROJECTILE_PRIME_SOURCE_NAME;
+            e->projectile_prime |= PROJECTILE_PRIME_SOURCE_NAME;
         }
 
-        e->projectile_prime += PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_UNDEFINED;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_UNDEFINED;
 
         e->position.y = a;
     }
@@ -31949,10 +32529,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_WEAPON;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_PROJECTILE;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_WEAPON;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_PROJECTILE;
 
         e->position.y = a;
     }
@@ -31964,10 +32544,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_ANIMATION;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_KNIFE;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_ANIMATION;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_KNIFE;
 
         e->position.y = a;
     }
@@ -31979,10 +32559,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_FLOOR;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_STATIONARY;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_ANIMATION;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_FLASH;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_FLOOR;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_STATIONARY;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_ANIMATION;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_FLASH;
 
         e->position.y = 0;
     }
@@ -31994,10 +32574,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_HEADER;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_KNIFE;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_HEADER;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_KNIFE;
 
         e->position.y = a;
     }
@@ -32009,10 +32589,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_FLOOR;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_STATIONARY;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_HEADER;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_PSHOTNO;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_FLOOR;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_STATIONARY;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_HEADER;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_PSHOTNO;
 
         e->position.y = 0;
     }
@@ -32024,10 +32604,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_GLOBAL;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_SHOT;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_GLOBAL;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_SHOT;
 
         e->position.y = a;
     }
@@ -32039,10 +32619,10 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
             return NULL;
         }
 
-        e->projectile_prime = PROJECTILE_PRIME_BASE_Y;
-        e->projectile_prime += PROJECTILE_PRIME_LAUNCH_MOVING;
-        e->projectile_prime += PROJECTILE_PRIME_SOURCE_GLOBAL;
-        e->projectile_prime += PROJECTILE_PRIME_REQUEST_KNIFE;
+        e->projectile_prime |= PROJECTILE_PRIME_BASE_Y;
+        e->projectile_prime |= PROJECTILE_PRIME_LAUNCH_MOVING;
+        e->projectile_prime |= PROJECTILE_PRIME_SOURCE_GLOBAL;
+        e->projectile_prime |= PROJECTILE_PRIME_REQUEST_KNIFE;
 
         e->position.y = a;
     }
@@ -32085,8 +32665,19 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
         e->modeldata.offscreenkill = 200;    //default value
     }
     e->modeldata.aiattack = AIATTACK1_NOATTACK;
-    e->remove_on_attack = e->modeldata.remove;
-    e->autokill = e->modeldata.nomove;
+    
+	// Kill self when we hit.
+	if (e->modeldata.remove)
+	{
+		e->autokill |= AUTOKILL_ATTACK_HIT;
+	}
+	
+    // Kill self when we finish animation.
+	if (e->modeldata.nomove)
+	{
+		e->autokill |= AUTOKILL_ANIMATION_COMPLETE;
+	}
+	
     e->speedmul = 2;
 
     ent_set_colourmap(e, map);
@@ -32116,7 +32707,11 @@ entity *knife_spawn(char *name, int index, float x, float z, float a, int direct
 
     e->modeldata.subject_to_wall = e->modeldata.subject_to_platform = e->modeldata.subject_to_hole = e->modeldata.subject_to_gravity = 1;
     e->modeldata.no_adjust_base  = 1;
-    return e;
+    
+	// Execute the projectile's on spawn event.
+	execute_onspawn_script(e);
+	
+	return e;
 }
 
 void bomb_explode()
@@ -32170,7 +32765,7 @@ entity *bomb_spawn(char *name, int index, float x, float z, float a, int directi
     e->attacking = ATTACKING_ACTIVE;
     e->owner = self;                                                     // Added so projectiles don't hit the owner
     e->nograb = 1;                                                       // Prevents trying to grab a projectile
-    e->toexplode = 1;                                                    // Set to distinguish exploding projectiles and also so stops falling when hitting an opponent
+    e->toexplode |= EXPLODE_PREPARED;                                    // Set to distinguish exploding projectiles and also so stops falling when hitting an opponent
     ent_set_colourmap(e, map);
     //e->direction = direction;
     toss(e, e->modeldata.jumpheight);
@@ -32181,8 +32776,13 @@ entity *bomb_spawn(char *name, int index, float x, float z, float a, int directi
     e->modeldata.aimove = AIMOVE1_BOMB;
     e->modeldata.aiattack = AIATTACK1_NOATTACK;                                    // Well, bomb's attack animation is passive, dont use any A.I. code.
     e->takedamage = common_takedamage;
-    e->remove_on_attack = 0;
-    e->autokill = e->modeldata.nomove;
+	e->autokill &= ~AUTOKILL_ATTACK_HIT;
+
+	if (e->modeldata.nomove)
+	{
+		e->autokill |= AUTOKILL_ANIMATION_COMPLETE;
+	}
+	
     e->speedmul = 2;
 
 
@@ -32198,7 +32798,11 @@ entity *bomb_spawn(char *name, int index, float x, float z, float a, int directi
     }
     e->modeldata.no_adjust_base = 0;
     e->modeldata.subject_to_basemap = e->modeldata.subject_to_wall = e->modeldata.subject_to_platform = e->modeldata.subject_to_hole = e->modeldata.subject_to_gravity = 1;
-    return e;
+    
+	// Execute the projectile's on spawn event.
+	execute_onspawn_script(e);
+	
+	return e;
 }
 
 // Spawn 3 stars
@@ -32237,7 +32841,7 @@ int star_spawn(float x, float z, float a, int direction)  // added entity to kno
             return 0;
         }
 
-        self->attacking = ATTACKING_INACTIVE;
+        self->attacking = ATTACKING_NONE;
 
         if (i <= 0) first_sortid = e->sortid;
         e->sortid = first_sortid - i;
@@ -32256,8 +32860,13 @@ int star_spawn(float x, float z, float a, int direction)  // added entity to kno
         e->takeaction = NULL;
         e->modeldata.aimove = AIMOVE1_STAR;
         e->modeldata.aiattack = AIATTACK1_NOATTACK;
-        e->remove_on_attack = e->modeldata.remove;
-        e->position.y = e->base = a;
+        
+		if (e->modeldata.remove)
+		{
+			e->autokill |= AUTOKILL_ATTACK_HIT;
+		}
+				
+		e->position.y = e->base = a;
         e->speedmul = 2;
         //e->direction = direction;
 
@@ -32275,6 +32884,9 @@ int star_spawn(float x, float z, float a, int direction)  // added entity to kno
         e->modeldata.no_adjust_base = 0;
 
         e->spawntype = SPAWN_TYPE_PROJECTILE_STAR;
+
+		// Execute the projectile's on spawn event.
+		execute_onspawn_script(e);
     }
     return 1;
 }
@@ -32320,6 +32932,9 @@ void steam_spawn(float x, float z, float a)
     e->base = a;
     e->modeldata.no_adjust_base = 1;
     e->think = steam_think;
+
+	// Execute the steams's on spawn event.
+	execute_onspawn_script(e);
 }
 
 
@@ -32425,7 +33040,7 @@ int biker_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
     if(attack->no_pain) // don't drop driver until it is dead, because the attack has no pain effect
     {
         checkdamage(other, attack);
-        if(self->energy_status.health_current > 0)
+        if(self->energy_state.health_current > 0)
         {
             return 1;    // not dead yet
         }
@@ -32453,12 +33068,12 @@ int biker_takedamage(entity *other, s_collision_attack *attack, int fall_flag)
         }
         else
         {
-            self->energy_status.health_current -= attack->attack_force;
+            self->energy_state.health_current -= attack->attack_force;
         }
         self = tempself;
 
     }
-    self->energy_status.health_current = 0;
+    self->energy_state.health_current = 0;
     checkdeath();
     return 1;
 }
@@ -32500,7 +33115,7 @@ int obstacle_takedamage(entity *other, s_collision_attack *attack, int fall_flag
         return 0;
     }
 
-    //self->pain_time = _time + (attack->pain_time?attack->pain_time:(GAME_SPEED / 5));
+    //self->next_hit_time = _time + (attack->next_hit_time?attack->next_hit_time:(GAME_SPEED / 5));
     set_opponent(other, self);
     if(self->opponent && (self->opponent->modeldata.type & TYPE_PLAYER))
     {
@@ -32510,7 +33125,7 @@ int obstacle_takedamage(entity *other, s_collision_attack *attack, int fall_flag
     self->playerindex = other->playerindex;    // Added so points go to the correct player
     addscore(other->playerindex, attack->attack_force * self->modeldata.multiple);  // Points can now be given for hitting an obstacle
 
-    if(self->energy_status.health_current <= 0)
+    if(self->energy_state.health_current <= 0)
     {
 
         checkdeath();
@@ -32663,12 +33278,12 @@ entity *smartspawn(s_spawn_entry *props)      // 7-1-2005 Entire section replace
 
     if(props->health[playercount - 1] != 0)
     {
-        e->energy_status.health_current = e->modeldata.health = props->health[playercount - 1];
+        e->energy_state.health_current = e->modeldata.health = props->health[playercount - 1];
     }
 
     if(props->mp != 0)
     {
-        e->energy_status.mp_current = e->modeldata.mp = props->mp;
+        e->energy_state.mp_current = e->modeldata.mp = props->mp;
     }
 
     if(props->score != 0)
@@ -32922,21 +33537,21 @@ void spawnplayer(int index)
 
     if(player[index].spawnhealth)
     {
-        player[index].ent->energy_status.health_current = player[index].spawnhealth + 5;
+        player[index].ent->energy_state.health_current = player[index].spawnhealth + 5;
     }
-    if(player[index].ent->energy_status.health_current > player[index].ent->modeldata.health)
+    if(player[index].ent->energy_state.health_current > player[index].ent->modeldata.health)
     {
-        player[index].ent->energy_status.health_current = player[index].ent->modeldata.health;
+        player[index].ent->energy_state.health_current = player[index].ent->modeldata.health;
     }
 
     //mp little recorver after a level by tails
     if(player[index].spawnmp)
     {
-        player[index].ent->energy_status.mp_current = player[index].spawnmp + 2;
+        player[index].ent->energy_state.mp_current = player[index].spawnmp + 2;
     }
-    if(player[index].ent->energy_status.mp_current > player[index].ent->modeldata.mp)
+    if(player[index].ent->energy_state.mp_current > player[index].ent->modeldata.mp)
     {
-        player[index].ent->energy_status.mp_current = player[index].ent->modeldata.mp;
+        player[index].ent->energy_state.mp_current = player[index].ent->modeldata.mp;
     }
 
     if(player[index].weapnum)
@@ -32955,7 +33570,7 @@ int no_player_alive_to_join()
     int i;
     for(i = 0; i < MAX_PLAYERS; i++)
     {
-        if( ((!player[i].ent || player[i].lives <= 0 || (player[i].lives <= 1 && player[i].ent->energy_status.health_current <= 0)) &&
+        if( ((!player[i].ent || player[i].lives <= 0 || (player[i].lives <= 1 && player[i].ent->energy_state.health_current <= 0)) &&
             ((noshare && player[i].credits <= 0) || (!noshare && credits <= 0)))
         )
         {
@@ -32989,14 +33604,14 @@ void kill_all_players_by_timeover()
         if(self && !validanim(self, ANI_LOSE))
         {
             endgame = 0;
-            attack_timeover.attack_force = self->energy_status.health_current;
+            attack_timeover.attack_force = self->energy_state.health_current;
             self->takedamage(self, &attack_timeover, 0);
         }
         else if(self)
         {
             endgame = 0;
 
-            attack_lose.attack_force = self->energy_status.health_current;
+            attack_lose.attack_force = self->energy_state.health_current;
             if (inair(self) && validanim(self, ANI_FALLLOSE))
             {
                 attack_lose.dropv.y = default_model_dropv.y;
@@ -33776,7 +34391,8 @@ void draw_scrolled_bg()
 
         //printf("layer %d, handle:%u, z:%d\n", index, layer->gfx.handle, layer->position.z);
 
-        if(!layer->drawmethod.xrepeat || !layer->drawmethod.yrepeat || !layer->enabled)
+		// Layer must be enabled and have at least one instace, or we don't draw it.
+        if(!screenmethod.xrepeat || !screenmethod.yrepeat || !layer->enabled)
         {
             continue;
         }
@@ -33820,7 +34436,7 @@ void draw_scrolled_bg()
             i = 0;
         }
 
-        if(i > 0 && screenmethod.water.watermode != 3  && screenmethod.water.amplitude)
+        if(i > 0 && screenmethod.water.watermode != WATER_MODE_SHEAR && screenmethod.water.amplitude)
         {
             i--;
             x -= width;
@@ -33835,7 +34451,8 @@ void draw_scrolled_bg()
         {
             j = 0;
         }
-        if(layer->neon)
+        
+		if(layer->neon)
         {
             screenmethod.table = neontable;
         }
@@ -33850,10 +34467,11 @@ void draw_scrolled_bg()
                 screenmethod.table = NULL;
             }
         }
+
         screenmethod.water.wavetime =  (int)(timevar * screenmethod.water.wavespeed);
         screenmethod.xrepeat = screenmethod.yrepeat = 0;
         for(m = z; j < layer->drawmethod.yrepeat && m < vph; m += height, j++, screenmethod.yrepeat++);
-        for(l = x; i < layer->drawmethod.xrepeat && l < vpw + (screenmethod.water.watermode == 3 ? 0 : screenmethod.water.amplitude * 2); l += width, i++, screenmethod.xrepeat++);
+        for(l = x; i < layer->drawmethod.xrepeat && l < vpw + (screenmethod.water.watermode == WATER_MODE_SHEAR ? 0 : screenmethod.water.amplitude * 2); l += width, i++, screenmethod.xrepeat++);
 
         if(layer->gfx.screen->magic == screen_magic)
         {
@@ -33882,6 +34500,37 @@ u32 getinterval()
         interval = GAME_SPEED / 4;
     }
     return interval;
+}
+
+// Caskey, Damon V.
+// 2019-04-22
+// 
+// Run input scripts. Similar to keys, but
+// execute before processing any command functions.
+void execute_input_scripts(int player_index)
+{
+	s_player *player_obj = NULL;
+		
+	player_obj = player + player_index;
+
+	if (!player_obj)
+	{
+		return;
+	}
+	
+	if (player_obj->newkeys || (keyscriptrate && player->keys) || player->releasekeys)
+	{
+		// 2019-04-22 Don't exist yet
+		//if (level)
+		//{
+
+			//execute_level_key_script(player_index, player);
+			//execute_entity_key_script(player.ent);
+		//}
+		//execute_key_script(player_index, player);
+
+		execute_input_script_all(player_index);
+	}
 }
 
 void inputrefresh(int playrecmode)
@@ -33921,6 +34570,8 @@ void inputrefresh(int playrecmode)
             pl->playkeys &= pl->keys;
             pl->playkeys &= ~pl->disablekeys;
         }
+				
+		execute_input_scripts(p);		
 
         if(pl->ent && pl->ent->movetime < _time)
         {
@@ -33929,7 +34580,7 @@ void inputrefresh(int playrecmode)
             pl->combostep = 0;
         }
         if(pl->newkeys)
-        {
+        {			
             k = pl->newkeys;
             if(pl->ent)
             {
@@ -34597,7 +35248,7 @@ void fade_out(int type, int speed)
     int current = speed ? speed : fade;
     s_screen *fbuffer = NULL;
     s_drawmethod dm = plainmethod;
-    dm.alpha = 6;
+    dm.alpha = BLEND_MODE_AVERAGE;
 
     for(i = 0, j = 0; j < 64; )
     {
@@ -34615,7 +35266,7 @@ void fade_out(int type, int speed)
                         fbuffer = allocscreen(vscreen->width, vscreen->height, vscreen->pixelformat);
                         copyscreen(fbuffer, vscreen);
                     }
-                    //255 + alpha 6 is actually half blend, so use 254 instead
+                    //255 + alpha BLEND_MODE_AVERAGE is actually half blend, so use 254 instead
                     dm.channelr = dm.channelg = dm.channelb = 254 * (64 - j) / 64;
                     clearscreen(vscreen);
                     putscreen(vscreen, fbuffer, 0, 0, &dm);
@@ -35136,7 +35787,7 @@ void startup()
     printf("Done!\n");
 
     printf("Initialize Sound..............\t");
-    if(savedata.usesound && sound_init(12))
+    if(sound_init(12))
     {
         if(load_special_sounds())
         {
@@ -35146,9 +35797,9 @@ void startup()
         {
             printf("\n");
         }
-        if(!sound_start_playback(savedata.soundbits, savedata.soundrate))
+        if(!sound_start_playback())
         {
-            printf("Warning: can't play sound at %u Hz!\n", savedata.soundrate);
+            printf("Warning: can't play sound!\n");
         }
         SB_setvolume(SB_MASTERVOL, 15);
         SB_setvolume(SB_VOICEVOL, savedata.soundvol);
@@ -35796,7 +36447,6 @@ void savelevelinfo()
 void tryvictorypose(entity *ent)
 {
     if( ent &&
-       !ent->blocking_pain &&
        !ent->inpain &&
        !ent->falling &&
        !ent->dead &&
@@ -35806,7 +36456,7 @@ void tryvictorypose(entity *ent)
     {
         ent->takeaction = NULL;
         ent->velocity.x = ent->velocity.z = 0;
-        ent->idling = IDLING_INACTIVE;
+        ent->idling = IDLING_NONE;
         ent_set_anim(ent, ANI_VICTORY, 0);
     }
 }
@@ -35945,8 +36595,8 @@ int playlevel(char *filename)
         if(player[i].ent)
         {
             nomaxrushreset[i] = player[i].ent->rush.count.max;
-            player[i].spawnhealth = player[i].ent->energy_status.health_current;
-            player[i].spawnmp = player[i].ent->energy_status.mp_current;
+            player[i].spawnhealth = player[i].ent->energy_state.health_current;
+            player[i].spawnmp = player[i].ent->energy_state.mp_current;
         }
         // reset
         player[i].weapnum = 0;
@@ -35960,8 +36610,8 @@ int playlevel(char *filename)
 
     unload_level();
 
-    //|| (player[0].lives > 0 || player[1].lives > 0 || player[2].lives > 0 || player[3].lives > 0)
-    for(i = 0; i < MAX_PLAYERS; i++)
+    // Are any players alive?
+	for(i = 0; i < MAX_PLAYERS; i++)
     {
         if (player[i].lives > 0)
         {
@@ -35970,22 +36620,67 @@ int playlevel(char *filename)
         }
     }
 
-    return ( (type == 2 && endgame != 2) || p_alive );
+    return ((type == 2 && endgame != 2) || p_alive);
 }
 
-
-static entity *spawnexample(int i)
+// Caskey, Damon V (retool, OA unknown)
+// 2019-01-03
+//
+// For select screen. Spawn sample entity for player_index.
+static entity *spawnexample(int player_index)
 {
-    entity *example;
-    s_set_entry *set = levelsets + current_set;
-    example = spawn((float)psmenu[i][0], (float)psmenu[i][1], 0, spdirection[i], NULL, -1, nextplayermodeln(NULL, i));
-    strcpy(player[i].name, example->model->name);
+	#define SPAWN_MODEL_NAME	NULL
+	#define SPAWN_MODEL_INDEX	-1
 
-    player[i].colourmap = (colourselect && (set->nosame & 2)) ? nextcolourmapn(example->model, -1, i) : 0;
+    entity	*example;
+	s_model *model;
+	s_set_entry *set;
 
-    ent_set_colourmap(example, player[i].colourmap);
-    example->spawntype = SPAWN_TYPE_PLAYER_SELECT;
-    return example;
+	float pos_x;
+	float pos_y;
+	float pos_z;
+	int direction;
+		
+	set = levelsets + current_set;
+
+	// Get spawn attributes and spawn entity.
+	pos_x = (float)psmenu[player_index][0];
+	pos_y = 0;
+	pos_z = (float)psmenu[player_index][1];
+	direction = spdirection[player_index];
+
+	// Next selectable model in cycle. We'll use this
+	// to decide what we spawn.
+	model = nextplayermodeln(NULL, player_index);
+
+	example = spawn(pos_x, pos_z, pos_y, direction, SPAWN_MODEL_NAME, SPAWN_MODEL_INDEX, model);
+    
+	// Copy model's name to player property.
+	strcpy(player[player_index].name, model->name);
+
+	// If color selection is allowed and we want
+	// players with same models to use different
+	// maps, then use next map in cycle. Otherwise
+	// just go with default map.
+	if (colourselect && (set->nosame & 2))
+	{
+		player[player_index].colourmap = nextcolourmapn(model, -1, player_index);
+	}
+	else
+	{
+		player[player_index].colourmap = 0;
+	}
+
+	// Apply map to spawned entity.
+    ent_set_colourmap(example, player[player_index].colourmap);
+    
+	// So the entity knows how it came to be.
+	example->spawntype = SPAWN_TYPE_PLAYER_SELECT;
+    
+	return example;
+
+	#undef SPAWN_MODEL_NAME
+	#undef SPAWN_MODEL_INDEX
 }
 
 // load saved select screen
@@ -36026,362 +36721,531 @@ static void load_select_screen_info(s_savelevel *save)
 
 int selectplayer(int *players, char *filename, int useSavedGame)
 {
-    s_model *tempmodel;
-    entity *example[4] = {NULL, NULL, NULL, NULL};
-    int i;
-    int exit = 0;
-    int ready[MAX_PLAYERS] = {0, 0, 0, 0};
-    int escape = 0;
-    int defaultselect = 0;
-    unsigned exitdelay = 0;
-    int players_busy = 0;
-    int players_ready = 0;
-    char string[MAX_BUFFER_LEN] = {""};
-    char *buf, *command;
-    size_t size = 0;
-    ptrdiff_t pos = 0;
-    ArgList arglist;
-    char argbuf[MAX_ARG_LEN + 1] = "";
-    s_set_entry *set = levelsets + current_set;
-    s_savelevel *save = savelevel + current_set;
-    int load_count = 0, saved_select_screen = 0;
-    int is_first_select = 1;
+	s_model *tempmodel;
+	s_model *model_old = NULL;
+	s_model *model_new = NULL;
+	int i;
+	int exit = 0;
+	int escape = 0;
+	int defaultselect = 0;
+	unsigned exitdelay = 0;
+	int players_busy = 0;
+	int players_ready = 0;
+	char string[MAX_BUFFER_LEN] = { "" };
+	char *buf, *command;
+	size_t size = 0;
+	ptrdiff_t pos = 0;
+	ArgList arglist;
+	char argbuf[MAX_ARG_LEN + 1] = "";
+	s_set_entry *set = levelsets + current_set;
+	s_savelevel *save = savelevel + current_set;
+	int load_count = 0;
+	int saved_select_screen = 0;
+	int is_first_select = 1;
 
-    savelevelinfo();
+	savelevelinfo();
 
-    selectScreen = 1;
-    kill_all();
-    if( allowselect_args[0] != 'a' && allowselect_args[0] != 'A' ) reset_playable_list(1); // 'a' is the first char of allowselect, if there's 'a' then there is allowselect
-    memset(player, 0, sizeof(*player) * 4);
+	selectScreen = 1;
+	kill_all();
 
-    if(useSavedGame && save)
-    {
-        if (save->selectFlag)
-        {
-            load_select_screen_info(save);
-            load_playable_list(save->allowSelectArgs);
-            saved_select_screen = 1;
-        }
-    }
+	// Initialize player sized arrays.
+	entity *example[set->maxplayers];
+	int ready[set->maxplayers];
 
-    //loadGameFile();
+	// Initialize 
+	for (i = 0; i < set->maxplayers; i++)
+	{
+		example[i] = NULL;
+		ready[i] = 0;
+	}
 
-    for(i = 0; i < set->maxplayers; i++)
-    {
-        player[i].hasplayed = players[i];
-    }
+	// Allow select? 'a' is the first char of allowselect,
+	// if there's 'a' then there is allowselect.
+	if (allowselect_args[0] != 'a'
+		&& allowselect_args[0] != 'A')
+	{
+		reset_playable_list(1);
+	}
 
-    for(i = 0; i < set->maxplayers; i++)
-    {
-        if (savelevel[current_set].pLives[i] > 0)
-        {
-            is_first_select = 0;
-            break;
-        }
-    }
+	// Reset memory for player array.
+	memset(player, 0, sizeof(*player) * MAX_PLAYERS);
 
-    if(filename && filename[0])
-    {
-        if(buffer_pakfile(filename, &buf, &size) != 1)
-        {
-            borShutdown(1, "Failed to load player select file '%s'", filename);
-        }
-        while(pos < size)
-        {
-            ParseArgs(&arglist, buf + pos, argbuf);
-            command = GET_ARG(0);
-            if(command && command[0])
-            {
-                if(stricmp(command, "music") == 0)
-                {
-                    music(GET_ARG(1), GET_INT_ARG(2), atol(GET_ARG(3)));
-                    // SAVE
-                    multistrcatsp(save->selectMusic, command,GET_ARG(1),GET_ARG(2),GET_ARG(3),NULL);
-                }
-                else if(stricmp(command, "allowselect") == 0)
-                {
-                    load_playable_list(buf + pos);
-                    memcpy(&save->allowSelectArgs, &allowselect_args, sizeof(allowselect_args)); // SAVE
-                }
-                else if(stricmp(command, "background") == 0)
-                {
-                    load_background(GET_ARG(1), 1);
-                    // SAVE
-                    multistrcatsp(save->selectBackground, command,GET_ARG(1),NULL);
-                }
-                else if(stricmp(command, "load") == 0)
-                {
-                    tempmodel = findmodel(GET_ARG(1));
-                    if (!tempmodel)
-                    {
-                        load_cached_model(GET_ARG(1), filename, GET_INT_ARG(2));
-                    }
-                    else
-                    {
-                        update_model_loadflag(tempmodel, GET_INT_ARG(2));
-                    }
-                    // SAVE
-                    if(load_count < MAX_SELECT_LOADS)
-                    {
-                        multistrcatsp(save->selectLoad[load_count], command,GET_ARG(1),GET_ARG(2),NULL);
-                        load_count++;
-                    }
-                }
-                else if(command && command[0])
-                {
-                    printf("Command '%s' is not understood in file '%s'\n", command, filename);
-                }
-            }
+	// Load game selected and a save game available?
+	if (useSavedGame && save)
+	{
+		if (save->selectFlag)
+		{
+			load_select_screen_info(save);
+			load_playable_list(save->allowSelectArgs);
+			saved_select_screen = 1;
+		}
+	}
 
-            pos += getNewLineStart(buf + pos);
-        }
-        save->selectLoadCount = load_count; // SAVE number of LOAD command
-        save->selectFlag = 1;
+	// Mark "hasplayed" for all players.
+	for (i = 0; i < set->maxplayers; i++)
+	{
+		player[i].hasplayed = players[i];
+	}
 
-        if(buf != NULL)
-        {
-            free(buf);
-            buf = NULL;
-        }
-    }
-    else // without select.txt
-    {
-        if(is_first_select || (!skipselect[0][0] && !set->noselect)) // no select is skipselect without names
-        {
-            defaultselect = 1; // normal select or skipselect/noselect? 1 == normal select
-        }
+	for (i = 0; i < set->maxplayers; i++)
+	{
+		if (savelevel[current_set].pLives[i] > 0)
+		{
+			is_first_select = 0;
+			break;
+		}
+	}
 
-        if(!noshare)
-        {
-            credits = CONTINUES;
-        }
-        else for(i = 0; i < set->maxplayers; i++)
-        {
-            if(players[i])
-            {
-                player[i].credits = CONTINUES;
-            }
-        }
+	// Load and apply selection text file.
+	if (filename && filename[0])
+	{
+		if (buffer_pakfile(filename, &buf, &size) != 1)
+		{
+			borShutdown(1, "Failed to load player select file '%s'", filename);
+		}
+		while (pos < size)
+		{
+			ParseArgs(&arglist, buf + pos, argbuf);
+			command = GET_ARG(0);
+			if (command && command[0])
+			{
+				if (stricmp(command, "music") == 0)
+				{
+					music(GET_ARG(1), GET_INT_ARG(2), atol(GET_ARG(3)));
+					// SAVE
+					multistrcatsp(save->selectMusic, command, GET_ARG(1), GET_ARG(2), GET_ARG(3), NULL);
+				}
+				else if (stricmp(command, "allowselect") == 0)
+				{
+					load_playable_list(buf + pos);
+					memcpy(&save->allowSelectArgs, &allowselect_args, sizeof(allowselect_args)); // SAVE
+				}
+				else if (stricmp(command, "background") == 0)
+				{
+					load_background(GET_ARG(1), 1);
+					// SAVE
+					multistrcatsp(save->selectBackground, command, GET_ARG(1), NULL);
+				}
+				else if (stricmp(command, "load") == 0)
+				{
+					tempmodel = findmodel(GET_ARG(1));
+					if (!tempmodel)
+					{
+						load_cached_model(GET_ARG(1), filename, GET_INT_ARG(2));
+					}
+					else
+					{
+						update_model_loadflag(tempmodel, GET_INT_ARG(2));
+					}
+					// SAVE
+					if (load_count < MAX_SELECT_LOADS)
+					{
+						multistrcatsp(save->selectLoad[load_count], command, GET_ARG(1), GET_ARG(2), NULL);
+						load_count++;
+					}
+				}
+				else if (command && command[0])
+				{
+					printf("Command '%s' is not understood in file '%s'\n", command, filename);
+				}
+			}
 
-        if(skipselect[0][0] || set->noselect)
-        {
-            for(i = 0; i < set->maxplayers; i++)
-            {
-                if(!players[i])
-                {
-                    continue;
-                }
-                strncpy(player[i].name, skipselect[i], MAX_NAME_LEN);
+			pos += getNewLineStart(buf + pos);
+		}
+		save->selectLoadCount = load_count; // SAVE number of LOAD command
+		save->selectFlag = 1;
 
-                if(defaultselect)
-                {
-                    player[i].lives = PLAYER_LIVES;
-                    if(!creditscheat)
-                    {
-                        if(noshare)
-                        {
-                            --player[i].credits;
-                        }
-                        else
-                        {
-                            --credits;
-                        }
-                    }
-                }
-                else
-                {
-                    player[i].lives = savelevel[current_set].pLives[i];
-                    player[i].score = savelevel[current_set].pScores[i];
-                    if(noshare) player[i].credits = savelevel[current_set].pCredits[i];
-                    else credits = savelevel[current_set].credits;
-                }
-            }
-            selectScreen = 0;
+		if (buf != NULL)
+		{
+			free(buf);
+			buf = NULL;
+		}
+	}
+	else // without select.txt
+	{
+		if (is_first_select || (!skipselect[0][0] && !set->noselect)) // no select is skipselect without names
+		{
+			defaultselect = 1; // normal select or skipselect/noselect? 1 == normal select
+		}
 
-            return 1;
-        }
+		if (!noshare)
+		{
+			credits = CONTINUES;
+		}
+		else for (i = 0; i < set->maxplayers; i++)
+		{
+			if (players[i])
+			{
+				player[i].credits = CONTINUES;
+			}
+		}
 
-        if (!saved_select_screen)
-        {
-            if(unlockbg && bonus)
-            {
-                // New alternative background path for PSP
-                if(custBkgrds != NULL)
-                {
-                    strcpy(string, custBkgrds);
-                    strcat(string, "unlockbg");
-                    load_background(string, 1);
-                }
-                else
-                {
-                    load_cached_background("data/bgs/unlockbg", 1);
-                }
-            }
-            else
-            {
-                // New alternative background path for PSP
-                if(custBkgrds != NULL)
-                {
-                    strcpy(string, custBkgrds);
-                    strcat(string, "select");
-                    load_background(string, 1);
-                }
-                else
-                {
-                    load_cached_background("data/bgs/select", 1);
-                }
-            }
-            if(!music("data/music/menu", 1, 0))
-            {
-                music("data/music/remix", 1, 0);
-            }
-        }
-    }
+		if (skipselect[0][0] || set->noselect)
+		{
+			for (i = 0; i < set->maxplayers; i++)
+			{
+				if (!players[i])
+				{
+					continue;
+				}
+				strncpy(player[i].name, skipselect[i], MAX_NAME_LEN);
 
-    for(i = 0; i < set->maxplayers; i++)
-    {
-        if(players[i])
-        {
-            example[i] = spawnexample(i);
-            player[i].playkeys = 0;
-            if(defaultselect)
-            {
-                player[i].lives = PLAYER_LIVES;
-                if(!creditscheat)
-                {
-                    if(noshare)
-                    {
-                        --player[i].credits;
-                    }
-                    else
-                    {
-                        --credits;
-                    }
-                }
-            }
-            else
-            {
-                player[i].lives = savelevel[current_set].pLives[i];
-                player[i].score = savelevel[current_set].pScores[i];
-                if(noshare) player[i].credits = savelevel[current_set].pCredits[i];
-                else credits = savelevel[current_set].credits;
-            }
-        }
-    }
+				if (defaultselect)
+				{
+					player[i].lives = PLAYER_LIVES;
+					if (!creditscheat)
+					{
+						if (noshare)
+						{
+							--player[i].credits;
+						}
+						else
+						{
+							--credits;
+						}
+					}
+				}
+				else
+				{
+					player[i].lives = savelevel[current_set].pLives[i];
+					player[i].score = savelevel[current_set].pScores[i];
+					if (noshare) player[i].credits = savelevel[current_set].pCredits[i];
+					else credits = savelevel[current_set].credits;
+				}
+			}
+			selectScreen = 0;
 
-    _time = 0;
-    while(!(exit || escape))
-    {
-        players_busy = 0;
-        players_ready = 0;
-        for(i = 0; i < set->maxplayers; i++)
-        {
-            if(!ready[i])
-            {
-                if(!player[i].hasplayed && (noshare || credits > 0) && (player[i].newkeys & FLAG_ANYBUTTON))
-                {
-                    players[i] = player[i].hasplayed = 1;
-                    //printf("%d %d %d\n", i, player[i].lives, immediate[i]);
+			return 1;
+		}
 
-                    if(noshare)
-                    {
-                        player[i].credits = CONTINUES;
-                    }
+		if (!saved_select_screen)
+		{
+			if (unlockbg && bonus)
+			{
+				// New alternative background path for PSP
+				if (custBkgrds != NULL)
+				{
+					strcpy(string, custBkgrds);
+					strcat(string, "unlockbg");
+					load_background(string, 1);
+				}
+				else
+				{
+					load_cached_background("data/bgs/unlockbg", 1);
+				}
+			}
+			else
+			{
+				// New alternative background path for PSP
+				if (custBkgrds != NULL)
+				{
+					strcpy(string, custBkgrds);
+					strcat(string, "select");
+					load_background(string, 1);
+				}
+				else
+				{
+					load_cached_background("data/bgs/select", 1);
+				}
+			}
+			if (!music("data/music/menu", 1, 0))
+			{
+				music("data/music/remix", 1, 0);
+			}
+		}
+	}
 
-                    if(!creditscheat)
-                    {
-                        if(noshare)
-                        {
-                            --player[i].credits;
-                        }
-                        else
-                        {
-                            --credits;
-                        }
-                    }
+	for (i = 0; i < set->maxplayers; i++)
+	{
+		if (players[i])
+		{
+			example[i] = spawnexample(i);
+			player[i].playkeys = 0;
+			if (defaultselect)
+			{
+				player[i].lives = PLAYER_LIVES;
+				if (!creditscheat)
+				{
+					if (noshare)
+					{
+						--player[i].credits;
+					}
+					else
+					{
+						--credits;
+					}
+				}
+			}
+			else
+			{
+				player[i].lives = savelevel[current_set].pLives[i];
+				player[i].score = savelevel[current_set].pScores[i];
+				if (noshare) player[i].credits = savelevel[current_set].pCredits[i];
+				else credits = savelevel[current_set].credits;
+			}
+		}
+	}
 
-                    player[i].lives = PLAYER_LIVES;
-                    example[i] = spawnexample(i);
-                    player[i].playkeys = 0;
+	_time = 0;
 
-                    if(SAMPLE_BEEP >= 0)
-                    {
-                        sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
-                    }
-                }
-                else if(player[i].newkeys & (FLAG_MOVELEFT | FLAG_MOVERIGHT) && example[i])
-                {
-                    if(SAMPLE_BEEP >= 0)
-                    {
-                        sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
-                    }
-                    ent_set_model(example[i], ((player[i].newkeys & FLAG_MOVELEFT) ? prevplayermodeln : nextplayermodeln)(example[i]->model, i)->name, 0);
-                    strcpy(player[i].name, example[i]->model->name);
-                    player[i].colourmap = (colourselect && (set->nosame & 2)) ? nextcolourmapn(example[i]->model, -1, i) : 0;
-                    ent_set_colourmap(example[i], player[i].colourmap);
-                }
-                // oooh pretty colors! - selectable color scheme for player characters
-                else if(player[i].newkeys & (FLAG_MOVEUP | FLAG_MOVEDOWN) && colourselect && example[i])
-                {
-                    player[i].colourmap = ((player[i].newkeys & FLAG_MOVEUP) ? nextcolourmapn : prevcolourmapn)(example[i]->model, player[i].colourmap, i);
-                    ent_set_colourmap(example[i], player[i].colourmap);
-                }
-                else if((player[i].newkeys & FLAG_ANYBUTTON) && example[i])
-                {
-                    if(SAMPLE_BEEP2 >= 0)
-                    {
-                        sound_play_sample(SAMPLE_BEEP2, 0, savedata.effectvol, savedata.effectvol, 100);
-                    }
-                    // yay you picked me!
-                    if(validanim(example[i], ANI_PICK))
-                    {
-                        ent_set_anim(example[i], ANI_PICK, 0);
-                    }
-                    example[i]->stalltime = _time + GAME_SPEED * 2;
-                    ready[i] = 1;
-                }
-            }
-            else if(ready[i] == 1)
-            {
-                if(((!validanim(example[i], ANI_PICK) || example[i]->modeldata.animation[ANI_PICK]->loop.mode) && _time > example[i]->stalltime) || !example[i]->animating)
-                {
-                    ready[i] = 2;
-                    exitdelay = _time + GAME_SPEED;
-                }
-            }
-            else if(ready[i] == 2)
-            {
-                font_printf(psmenu[i][2], psmenu[i][3], 0, 0, Tr("Ready!"));
-            }
+	// Stay in selection until escape or exit.
+	// 
+	// exit = all players ready (selected) and exit delay expired.
+	// escape = Escape key pressed.
+	while (!(exit || escape))
+	{
+		players_busy = 0;
+		players_ready = 0;
 
-            if(example[i] != NULL)
-            {
-                players_busy++;
-            }
-            if(ready[i] == 2)
-            {
-                players_ready++;
-            }
-        }
+		// Loop through players.
+		for (i = 0; i < set->maxplayers; i++)
+		{
+			// Current player index not yet selected?
+			if (!ready[i])
+			{
+				
+				// This is where we present player selections. The logic is long
+				// and a little messy, so buckle up! Basically, we want to spawn
+				// an example entity to get started, and that example entity
+				// is what player sees on the selection screen. Then we switch
+				// its model/color/animation based on the situation and player
+				// input.
+				//
+				// 1. If an example entity exists and is playing a transition 
+				//  then we...
+				//
+				// a) do nothing if the animation isn't finished.
+				//
+				// b) If it IS finished...
+				//
+				// -- 1. If the animation is ANI_SELECTIN, then play ANI_SELECT.
+				// 
+				// -- 2. If aniamton is ANI_SELECTOUT, then we switch to new 
+				// model (if available).
+				//
+				// 2. If player hasn't played yet, has some credits or 
+				// can draw from credit pool and pressed any action button,
+				// then we'll deal with their credit pool and spawn the
+				// first example (selectable model preview). Having an 
+				// example spawned also tells us the player has completed 
+				// this step, and so it's OK to run actions from any of 
+				// the others.
+				//
+				// 3. If the player pressed Left or Right instead and there's
+				// an example spawned, then we find the previous/next 
+				// character in line, and record it to a variable. Then we
+				// see if example has ANI_SELECTIN. if it doesn't we switch
+				// to new model. If it does, play ANI_SELECT.
+				//
+				// 4. If the player presses Up or Down, we have an example 
+				// spawned and colourselect is enabled, then cycle to the
+				// model's previous/next color set choice.
+				//
+				// 5. If the player presses any action button and we have
+				// an example spawned, then we mark the player's ready delay 
+				// flag, and stalltime. See the parent logic block for 
+				// selection delay & exit details. This is the player
+				// making their selection choice.
 
-        if(players_busy && players_busy == players_ready && exitdelay && _time > exitdelay)
-        {
-            exit = 1;
-        }
-        update(0, 0);
+				// Example exists and select transition animation?
+				if (example[i] 
+					&& (example[i]->animnum == ANI_SELECTIN || example[i]->animnum == ANI_SELECTOUT))
+				{
+					// If still animating than do nothing. Let the transition finish.
+					if (example[i]->animating)
+					{
+					}
+					else
+					{
+						// Transition to select animation.
+						if (example[i]->animnum == ANI_SELECTIN)
+						{
+							ent_set_anim(example[i], ANI_SELECT, 0);
+						}
 
-        if(bothnewkeys & FLAG_ESC)
-        {
-            escape = 1;
-        }
-    }
+						// Transition from select (player selected another model, and the
+						// select out transition is now finished). Repeat of left/right key 
+						// logic below and probably needs consolidation.
+						if (example[i]->animnum == ANI_SELECTOUT && model_new)
+						{
+							// Apply new model.
+							ent_set_model(example[i], model_new->name, 0);
 
-    // No longer at the select screen
-    kill_all();
-    sound_close_music();
-    selectScreen = 0;
+							// Copy example model name to player name variable.
+							strcpy(player[i].name, example[i]->model->name);
 
-    return (!escape);
+							// If colorselect is enabled and nosame 2 is enabled, skip to
+							// start at next avaialble color cycle. Otherwise just start 
+							// with default color set (0).
+							if (colourselect && (set->nosame & 2))
+							{
+								player[i].colourmap = nextcolourmapn(example[i]->model, -1, i);
+							}
+							else
+							{
+								player[i].colourmap = 0;
+							}
+
+							//  Apply color set.
+							ent_set_colourmap(example[i], player[i].colourmap);
+						}
+					}
+				}
+				else if (!player[i].hasplayed
+					&& (noshare || credits > 0)
+					&& (player[i].newkeys & FLAG_ANYBUTTON))
+				{
+
+					//  Now this player has played.
+					players[i] = player[i].hasplayed = 1;
+					//printf("%d %d %d\n", i, player[i].lives, immediate[i]);
+
+					// Noshare means each player has their own credit pool.
+					if (noshare)
+					{
+						player[i].credits = CONTINUES;
+					}
+
+					// Credits cheat = infinite credits. If that's not enabled,
+					// then deduct a credit.
+					if (!creditscheat)
+					{
+						if (noshare)
+						{
+							--player[i].credits;
+						}
+						else
+						{
+							--credits;
+						}
+					}
+
+					// Give player default number of lives, spawn
+					// example model and cancel the key flag.
+					player[i].lives = PLAYER_LIVES;
+					example[i] = spawnexample(i);
+					player[i].playkeys = 0;
+
+					// Play sound effect.
+					if (SAMPLE_BEEP >= 0)
+					{
+						sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
+					}
+				}
+				else if (player[i].newkeys & (FLAG_MOVELEFT | FLAG_MOVERIGHT) && example[i])
+				{
+					// Give player a feedback sound.
+					if (SAMPLE_BEEP >= 0)
+					{
+						sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
+					}
+
+					// Get model in use right now.
+					model_old = example[i]->model;
+
+					// Let's get the new model. Left key = previous model 
+					// in cycle. Right key = next.
+					if ((player[i].newkeys & FLAG_MOVELEFT))
+					{
+						model_new = prevplayermodeln(model_old, i);
+					}
+					else
+					{
+						model_new = nextplayermodeln(model_old, i);
+					}
+
+					// Do we have a select out transition? If so play it here. 
+					// Otherwise switch to new model. 
+					if (validanim(example[i], ANI_SELECTOUT))
+					{						
+						ent_set_anim(example[i], ANI_SELECTOUT, 0);				
+					}
+					else
+					{
+						// Apply new model.
+						ent_set_model(example[i], model_new->name, 0);
+
+						// Copy example model name to player name variable.
+						strcpy(player[i].name, example[i]->model->name);
+
+						// If colorselect is enabled and nosame 2 is enabled, skip to
+						// start at next avaialble color cycle. Otherwise just start 
+						// with default color set (0).
+						if (colourselect && (set->nosame & 2))
+						{
+							player[i].colourmap = nextcolourmapn(example[i]->model, -1, i);
+						}
+						else
+						{
+							player[i].colourmap = 0;
+						}
+
+						//  Apply color set.
+						ent_set_colourmap(example[i], player[i].colourmap);
+					}					
+				}
+				else if (player[i].newkeys & (FLAG_MOVEUP | FLAG_MOVEDOWN) && colourselect && example[i])
+				{
+					player[i].colourmap = ((player[i].newkeys & FLAG_MOVEUP) ? nextcolourmapn : prevcolourmapn)(example[i]->model, player[i].colourmap, i);
+					ent_set_colourmap(example[i], player[i].colourmap);
+				}
+				else if ((player[i].newkeys & FLAG_ANYBUTTON) && example[i])
+				{
+					if (SAMPLE_BEEP2 >= 0)
+					{
+						sound_play_sample(SAMPLE_BEEP2, 0, savedata.effectvol, savedata.effectvol, 100);
+					}
+					// yay you picked me!
+					if (validanim(example[i], ANI_PICK))
+					{
+						ent_set_anim(example[i], ANI_PICK, 0);
+					}
+					example[i]->stalltime = _time + GAME_SPEED * 2;
+					ready[i] = 1;
+				}
+		
+			}
+			else if (ready[i] == 1)
+			{
+				if (((!validanim(example[i], ANI_PICK) || example[i]->modeldata.animation[ANI_PICK]->loop.mode) && _time > example[i]->stalltime) || !example[i]->animating)
+				{
+					ready[i] = 2;
+					exitdelay = _time + GAME_SPEED;
+				}
+			}
+			else if (ready[i] == 2)
+			{
+				font_printf(psmenu[i][2], psmenu[i][3], 0, 0, Tr("Ready!"));
+			}
+
+			if (example[i] != NULL)
+			{
+				players_busy++;
+			}
+			if (ready[i] == 2)
+			{
+				players_ready++;
+			}
+		}
+
+		if (players_busy && players_busy == players_ready && exitdelay && _time > exitdelay)
+		{
+			exit = 1;
+		}
+		update(0, 0);
+
+		if (bothnewkeys & FLAG_ESC)
+		{
+			escape = 1;
+		}
+	}
+
+	// No longer at the select screen
+	kill_all();
+	sound_close_music();
+	selectScreen = 0;
+
+	return (!escape);
 }
 
 void playgame(int *players,  unsigned which_set, int useSavedGame)
@@ -36621,7 +37485,7 @@ int menu_difficulty()
     //float slider = 0;
     int barx, bary, barw, barh;
     s_drawmethod drawmethod = plainmethod;
-    drawmethod.alpha = 1;
+    drawmethod.alpha = BLEND_MODE_ALPHA;
 
     barx = videomodes.hRes / 5;
     bary = _liney(0, 0) - 2;
@@ -37720,8 +38584,7 @@ void menu_options_sound()
         _menutext((selector == 3), col2, 1, (savedata.usemusic ? Tr("Enabled") : Tr("Disabled")));
         _menutext((selector == 4), col1, 2, Tr("Show Titles:"));
         _menutext((selector == 4), col2, 2, (savedata.showtitles ? Tr("Yes") : Tr("No")));
-        _menutext((selector == 5), col1, 3, Tr("Advanced Options..."));
-        _menutextm((selector == 6), 6, 0, Tr("Back"));
+        _menutextm((selector == 5), 5, 0, Tr("Back"));
 
         update((level != NULL), 0);
 
@@ -37749,9 +38612,9 @@ void menu_options_sound()
         }
         if(selector < 0)
         {
-            selector = 6;
+            selector = 5;
         }
-        if(selector > 6)
+        if(selector > 5)
         {
             selector = 0;
         }
@@ -37829,9 +38692,6 @@ void menu_options_sound()
                 break;
             case 4:
                 savedata.showtitles = !savedata.showtitles;
-                break;
-            case 5:
-                menu_options_soundcard();
                 break;
             default:
                 quit = 1;
@@ -37992,10 +38852,8 @@ void menu_options_debug()
         // and last can go in any
         // order.
         ITEM_POSITION,
-        ITEM_FEATURES,
         ITEM_COL_ATTACK,
         ITEM_COL_BODY,
-        ITEM_COL_ENTITY,
         ITEM_COL_RANGE,
 
         // This is the "Back"
@@ -38027,31 +38885,23 @@ void menu_options_debug()
         pos_y = MENU_POS_Y + MENU_ITEMS_MARGIN_Y;
 
         _menutext((selector == ITEM_PERFORMANCE),    COLUMN_1_POS_X, pos_y, Tr("Performance:"));
-        _menutext((selector == ITEM_PERFORMANCE),    COLUMN_2_POS_X, pos_y, (savedata.debuginfo ? Tr("Enabled") : Tr("Disabled")));
+        _menutext((selector == ITEM_PERFORMANCE),    COLUMN_2_POS_X, pos_y, (savedata.debuginfo & DEBUG_DISPLAY_PERFORMANCE ? Tr("Enabled") : Tr("Disabled")));
         pos_y++;
 
-        _menutext((selector == ITEM_POSITION),       COLUMN_1_POS_X, pos_y, Tr("Position:"));
-        _menutext((selector == ITEM_POSITION),       COLUMN_2_POS_X, pos_y, (savedata.debug_position ? Tr("Enabled") : Tr("Disabled")));
-        pos_y++;
-
-        _menutext((selector == ITEM_FEATURES),       COLUMN_1_POS_X, pos_y, Tr("Features:"));
-        _menutext((selector == ITEM_FEATURES),       COLUMN_2_POS_X, pos_y, (savedata.debug_features ? Tr("Enabled") : Tr("Disabled")));
+        _menutext((selector == ITEM_POSITION),       COLUMN_1_POS_X, pos_y, Tr("Basic Properties:"));
+        _menutext((selector == ITEM_POSITION),       COLUMN_2_POS_X, pos_y, (savedata.debuginfo & DEBUG_DISPLAY_PROPERTIES ? Tr("Enabled") : Tr("Disabled")));
         pos_y++;
 
         _menutext((selector == ITEM_COL_ATTACK),     COLUMN_1_POS_X, pos_y, Tr("Collision Attack:"));
-        _menutext((selector == ITEM_COL_ATTACK),     COLUMN_2_POS_X, pos_y, (savedata.debug_collision_attack ? Tr("Enabled") : Tr("Disabled")));
+        _menutext((selector == ITEM_COL_ATTACK),     COLUMN_2_POS_X, pos_y, (savedata.debuginfo & DEBUG_DISPLAY_COLLISION_ATTACK ? Tr("Enabled") : Tr("Disabled")));
         pos_y++;
 
         _menutext((selector == ITEM_COL_BODY),       COLUMN_1_POS_X, pos_y, Tr("Collision Body:"));
-        _menutext((selector == ITEM_COL_BODY),       COLUMN_2_POS_X, pos_y, (savedata.debug_collision_body ? Tr("Enabled") : Tr("Disabled")));
-        pos_y++;
-
-        _menutext((selector == ITEM_COL_ENTITY),       COLUMN_1_POS_X, pos_y, Tr("Collision Entity:"));
-        _menutext((selector == ITEM_COL_ENTITY),       COLUMN_2_POS_X, pos_y, (savedata.debug_collision_entity ? Tr("Enabled") : Tr("Disabled")));
+        _menutext((selector == ITEM_COL_BODY),       COLUMN_2_POS_X, pos_y, (savedata.debuginfo & DEBUG_DISPLAY_COLLISION_BODY ? Tr("Enabled") : Tr("Disabled")));
         pos_y++;
 
         _menutext((selector == ITEM_COL_RANGE),      COLUMN_1_POS_X, pos_y, Tr("Range:"));
-        _menutext((selector == ITEM_COL_RANGE),      COLUMN_2_POS_X, pos_y, (savedata.debug_collision_range ? Tr("Enabled") : Tr("Disabled")));
+        _menutext((selector == ITEM_COL_RANGE),      COLUMN_2_POS_X, pos_y, (savedata.debuginfo & DEBUG_DISPLAY_RANGE ? Tr("Enabled") : Tr("Disabled")));
         pos_y++;
 
         // Display exit title
@@ -38120,25 +38970,19 @@ void menu_options_debug()
             switch(selector)
             {
                 case ITEM_PERFORMANCE:
-                    savedata.debuginfo = !savedata.debuginfo;
+                    savedata.debuginfo ^= DEBUG_DISPLAY_PERFORMANCE;
                     break;
                 case ITEM_POSITION:
-                    savedata.debug_position = !savedata.debug_position;
-                    break;
-                case ITEM_FEATURES:
-                    savedata.debug_features = !savedata.debug_features;
-                    break;
+                    savedata.debuginfo ^= DEBUG_DISPLAY_PROPERTIES;
+                    break;                
                 case ITEM_COL_ATTACK:
-                    savedata.debug_collision_attack = !savedata.debug_collision_attack;
+                    savedata.debuginfo ^= DEBUG_DISPLAY_COLLISION_ATTACK;
                     break;
                 case ITEM_COL_BODY:
-                    savedata.debug_collision_body = !savedata.debug_collision_body;
-                    break;
-                case ITEM_COL_ENTITY:
-                    savedata.debug_collision_entity = !savedata.debug_collision_entity;
+                    savedata.debuginfo ^= DEBUG_DISPLAY_COLLISION_BODY;
                     break;
                 case ITEM_COL_RANGE:
-                    savedata.debug_collision_range = !savedata.debug_collision_range;
+                    savedata.debuginfo ^= DEBUG_DISPLAY_RANGE;
                     break;
                 case ITEM_EXIT:
                     quit = 1;
@@ -38466,22 +39310,25 @@ void menu_options_video()
         _menutext((selector == 7), col1, 4, Tr("Software Filter:"));
         _menutext((selector == 7), col2, 4, ((savedata.hwscale >= 2.0 || savedata.fullscreen) ? Tr(GfxBlitterNames[savedata.swfilter]) : Tr("Disabled")));
 
+        _menutext((selector == 8), col1, 5, Tr("VSync:"));
+        _menutext((selector == 8), col2, 5, savedata.vsync ? "Enabled" : "Disabled");
+
         if(savedata.fullscreen)
         {
-            _menutext((selector == 8), col1, 5, Tr("Fullscreen Type:"));
-            _menutext((selector == 8), col2, 5, (savedata.stretch ? Tr("Stretch to Screen") : Tr("Preserve Aspect Ratio")));
+            _menutext((selector == 9), col1, 6, Tr("Fullscreen Type:"));
+            _menutext((selector == 9), col2, 6, (savedata.stretch ? Tr("Stretch to Screen") : Tr("Preserve Aspect Ratio")));
         }
-        else if(selector == 8)
+        else if(selector == 9)
         {
-            selector = (bothnewkeys & FLAG_MOVEUP) ? 7 : 9;
+            selector = (bothnewkeys & FLAG_MOVEUP) ? 8 : 10;
         }
 
-        _menutextm((selector == 9), 7, 0, Tr("Back"));
+        _menutextm((selector == 10), 8, 0, Tr("Back"));
         if(selector < 0)
         {
-            selector = 9;
+            selector = 10;
         }
-        if(selector > 9)
+        if(selector > 10)
         {
             selector = 0;
         }
@@ -38761,6 +39608,10 @@ void menu_options_video()
 				video_set_mode(videomodes);
                 break;
             case 8:
+                savedata.vsync = !savedata.vsync;
+                video_set_mode(videomodes);
+                break;
+            case 9:
                 video_stretch((savedata.stretch ^= 1));
                 break;
 #endif
@@ -38912,108 +39763,6 @@ void menu_options()
     #undef CHEAT_PAUSE_POSY
 }
 
-void menu_options_soundcard()
-{
-    int quit = 0;
-    int selector = 0;
-    int col1 = -8, col2 = 6;
-
-    savesettings();
-
-    bothnewkeys = 0;
-
-    while(!quit)
-    {
-        _menutextm(2, -5, 0, Tr("Advanced Sound Options"));
-        _menutext((selector == 0), col1, -2, Tr("Frequency:"));
-        _menutext((selector == 0), col2, -2, "%i", savedata.soundrate);
-        _menutext((selector == 1), col1, -1, Tr("Bits:"));
-        _menutext((selector == 1), col2, -1, "%i", savedata.soundbits);
-        _menutextm((selector == 2), 1, 0, Tr("Apply"));
-        _menutextm((selector == 3), 2, 0, Tr("Discard"));
-        _menutextm((selector == 4), 7, 0, Tr("Back"));
-        update((level != NULL), 0);
-
-        if(bothnewkeys & FLAG_ESC)
-        {
-            quit = 1;
-        }
-        if(bothnewkeys & FLAG_MOVEUP)
-        {
-            --selector;
-            sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
-        }
-        if(bothnewkeys & FLAG_MOVEDOWN)
-        {
-            ++selector;
-            sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
-        }
-        if(selector < 0)
-        {
-            selector = 4;
-        }
-        selector %= 5;
-        if(bothnewkeys & (FLAG_MOVELEFT | FLAG_MOVERIGHT | FLAG_ANYBUTTON))
-        {
-            sound_play_sample(SAMPLE_BEEP2, 0, savedata.effectvol, savedata.effectvol, 100);
-            switch(selector)
-            {
-            case 0:
-                if(bothnewkeys & FLAG_MOVELEFT)
-                {
-                    savedata.soundrate >>= 1;
-                }
-                if(bothnewkeys & FLAG_MOVERIGHT)
-                {
-                    savedata.soundrate <<= 1;
-                }
-                if(savedata.soundrate < 11025)
-                {
-                    savedata.soundrate = 44100;
-                }
-                if(savedata.soundrate > 44100)
-                {
-                    savedata.soundrate = 11025;
-                }
-                break;
-            case 1:
-                savedata.soundbits = (savedata.soundbits ^ (8 + 16));
-                if(savedata.soundbits != 8 && savedata.soundbits != 16)
-                {
-                    savedata.soundbits = 8;
-                }
-                break;
-            case 2:
-                if(!(bothnewkeys & FLAG_ANYBUTTON))
-                {
-                    break;
-                }
-                // Apply new hardware settings
-                sound_stop_playback();
-                if(!sound_start_playback(savedata.soundbits, savedata.soundrate))
-                {
-                    savedata.soundbits = 8;
-                    savedata.soundrate = 11025;
-                    sound_start_playback(savedata.soundbits, savedata.soundrate);
-                }
-                music("data/music/remix", 1, 0);
-                savesettings();
-                break;
-            case 3:
-                if(bothnewkeys & FLAG_ANYBUTTON)
-                {
-                    loadsettings();
-                }
-                break;
-            default:
-                quit = (bothnewkeys & FLAG_ANYBUTTON);
-            }
-        }
-    }
-    loadsettings();
-    bothnewkeys = 0;
-}
-
 // ----------------------------------------------------------------------------
 
 
@@ -39056,6 +39805,7 @@ void openborMain(int argc, char **argv)
     printf("Game Selected: %s\n\n", packfile);
     loadsettings();
     startup();
+	bothnewkeys = 0;
 
     if(skiptoset < 0)
     {
