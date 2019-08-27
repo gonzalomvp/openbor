@@ -47,6 +47,7 @@ int            max_entity_vars = 0;
 int            max_script_vars = 0;
 int			   no_nested_script = 0;
 
+extern int  finisheds_games_count;
 extern int  ent_count;
 extern int  ent_max;
 extern int  gameOver;
@@ -959,7 +960,8 @@ static const char *svlist[] =
     "in_menuscreen",
     "in_new_game",
     "in_options",
-    "in_selectscreen",
+    //"in_selectscreen",
+    "in_sa_count",
     "in_showcomplete",
     "in_sound_options",
     "in_start_game",
@@ -8380,8 +8382,9 @@ int getsyspropertybyindex(ScriptVariant *var, int index)
         break;
     case _sv_in_selectscreen:
         ScriptVariant_ChangeType(var, VT_INTEGER);
-        var->lVal = selectScreen;
-        break;
+        //var->lVal = selectScreen;
+        var->lVal = finisheds_games_count;
+	break;
     case _sv_lasthita:
     case _sv_lasthity:
         ScriptVariant_ChangeType(var, VT_DECIMAL);
@@ -8427,7 +8430,8 @@ int getsyspropertybyindex(ScriptVariant *var, int index)
     case _sv_hresolution:
         ScriptVariant_ChangeType(var, VT_INTEGER);
         var->lVal = videomodes.hRes;
-        break;
+        //var->lVal = finisheds_games_count;
+	break;
     case _sv_vresolution:
         ScriptVariant_ChangeType(var, VT_INTEGER);
         var->lVal = videomodes.vRes;

@@ -43,7 +43,7 @@ up to 4 controllers.
 */
 void getPads(Uint8* keystate, Uint8* keystate_def)
 {
-	int i, j, x, axis;
+	int i, j, axis;
 	SDL_Event ev;
 	while(SDL_PollEvent(&ev))
 	{
@@ -145,7 +145,8 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
 			case SDL_QUIT:
 				borShutdown(0, DEFAULT_SHUTDOWN_MESSAGE);
 				break;
-
+				
+			/*
 			case SDL_JOYBUTTONUP:
 				for(i=0; i<JOY_LIST_TOTAL; i++)
 				{
@@ -159,39 +160,49 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
 							if(ev.jbutton.button == 2 || ev.jbutton.button == 1 || ev.jbutton.button == 3) joysticks[i].Hats &= ~(JoystickBits[4]);
 							if(ev.jbutton.button >= 8 && ev.jbutton.button <= 18) joysticks[i].Buttons &= ~(JoystickBits[ev.jbutton.button - 3]);
 						}
-						/*else
+						//else
                         {
                             // add key flag from event
                             #ifdef ANDROID
                             joysticks[i].Buttons &= 0x00 << ev.jbutton.button;
                             #endif
                         }*/
+			/*
 					}
 				}
 				break;
-
+			*/
+			/*
 			case SDL_JOYBUTTONDOWN:
 				// FIXME: restore GP2X controls
+				
+				//lastjoy = 1 + ev.jbutton.which * JOY_MAX_INPUTS + ev.jbutton.button;
+				
+				
 				for(i=0; i<JOY_LIST_TOTAL; i++)
 				{
 					if(ev.jbutton.which == i)
 					{
+						
+						//lastjoy = 1 + (SDL_NumJoysticks()- 1 - i) * JOY_MAX_INPUTS + ev.jbutton.button;
 						lastjoy = 1 + i * JOY_MAX_INPUTS + ev.jbutton.button;
-
 						// add key flag from event
-						/*#ifdef ANDROID
-						joysticks[i].Buttons |= 0x01 << ev.jbutton.button;
-						#endif*/
+						//#ifdef ANDROID
+						//joysticks[i].Buttons |= 0x01 << ev.jbutton.button;
+						//#endif
 					}
 				}
 				break;
-
+				*/
+			/*
 			case SDL_JOYHATMOTION:
+				
 				for(i=0; i<JOY_LIST_TOTAL; i++)
 				{
 					if(ev.jhat.which == i)
 					{
 						int hatfirst = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2*joysticks[i].NumAxes + 4*ev.jhat.hat;
+						//int hatfirst = 1 + (SDL_NumJoysticks()- 1 - i) * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2*joysticks[i].NumAxes + 4*ev.jhat.hat;
 						x = (joysticks[i].Hats >> (4*ev.jhat.hat)) & 0x0F; // hat's previous state
 						if(ev.jhat.value & SDL_HAT_UP       && !(x & SDL_HAT_UP))       lastjoy = hatfirst;
 						if(ev.jhat.value & SDL_HAT_RIGHT    && !(x & SDL_HAT_RIGHT))	lastjoy = hatfirst + 1;
@@ -209,13 +220,16 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
 					}
 				}
 				break;
-
+				*/
+			/*
 			case SDL_JOYAXISMOTION:
+			
 				for(i=0; i<JOY_LIST_TOTAL; i++)
 				{
 					if(ev.jaxis.which == i)
 					{
 						int axisfirst = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2*ev.jaxis.axis;
+						//int axisfirst = 1 + (SDL_NumJoysticks()- 1 - i) * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2*ev.jaxis.axis;
 						x = (joysticks[i].Axes >> (2*ev.jaxis.axis)) & 0x03; // previous state of axis
 						if(ev.jaxis.value <  -1*T_AXIS && !(x & 0x01))		lastjoy = axisfirst;
 						if(ev.jaxis.value >     T_AXIS && !(x & 0x02))		lastjoy = axisfirst + 1;
@@ -229,23 +243,26 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
 					}
 				}
 				break;
-
+				*/
             // PLUG AND PLAY
+            /*
             case SDL_JOYDEVICEADDED:
                 if (ev.jdevice.which < JOY_LIST_TOTAL)
                 {
-                    int i = ev.jdevice.which;
+                    
+					int i = ev.jdevice.which;
                     char buffer[MAX_BUFFER_LEN];
                     char joy_name[MAX_BUFFER_LEN];
-                    open_joystick(i);
+                    //open_joystick(i);
                     //get_time_string(buffer, MAX_BUFFER_LEN, (time_t)ev.jdevice.timestamp, TIMESTAMP_PATTERN);
-                    get_now_string(buffer, MAX_BUFFER_LEN, TIMESTAMP_PATTERN);
-                    numjoy = SDL_NumJoysticks();
-                    strcpy(joy_name,get_joystick_name(joysticks[i].Name));
-                    printf("Joystick: \"%s\" connected at port: %d at %s\n",joy_name,i,buffer);
+                    //get_now_string(buffer, MAX_BUFFER_LEN, TIMESTAMP_PATTERN);
+                    //numjoy = SDL_NumJoysticks();
+                    //strcpy(joy_name,get_joystick_name(joysticks[i].Name));
+                    //printf("Joystick: \"%s\" connected at port: %d at %s\n",joy_name,i,buffer);
+					
                 }
                 break;
-
+	    */
             case SDL_JOYDEVICEREMOVED:
                 if (ev.jdevice.which < JOY_LIST_TOTAL)
                 {
@@ -255,7 +272,7 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
                         char buffer[MAX_BUFFER_LEN];
                         char joy_name[MAX_BUFFER_LEN];
                         get_now_string(buffer, MAX_BUFFER_LEN, TIMESTAMP_PATTERN);
-                        close_joystick(i);
+                        //close_joystick(i);
                         numjoy = SDL_NumJoysticks();
                         strcpy(joy_name,get_joystick_name(joysticks[i].Name));
                         printf("Joystick: \"%s\" disconnected from port: %d at %s\n",joy_name,i,buffer);
@@ -271,38 +288,62 @@ void getPads(Uint8* keystate, Uint8* keystate_def)
 
 	if(joysticks[0].Type != JOY_TYPE_GAMEPARK)
 	{
+		u32 oldButtons;
+		u32 oldAxes; //variable que almacena el antiguo valor del eje para determinar si hubo cambio
+		u32 oldHat; //variable que almacena el antiguo valor de la cruceta para determinar si hubo cambio
+		
 		// new PC joystick code - forget about SDL joystick events, just do a state check
 		SDL_JoystickUpdate();
 		for(i = 0; i < JOY_LIST_TOTAL; i++)
 		{
 			// reset state
+			oldButtons = joysticks[i].Buttons; //Memorizamos el valor anterior, antes de reiniciarlo
+			oldAxes = joysticks[i].Axes; //Memorizamos el valor anterior, antes de reiniciarlo
+			oldHat = joysticks[i].Hats; //Memorizamos el valor anterior, antes de reiniciarlo
 			joysticks[i].Axes = joysticks[i].Hats = joysticks[i].Buttons = 0;
 			if (joystick[i] == NULL) continue;
 
 			// check buttons
 			for(j = 0; j < joysticks[i].NumButtons; j++)
-            {
-                joysticks[i].Buttons |= SDL_JoystickGetButton(joystick[i], j) << j;
-            }
+			{				
+				joysticks[i].Buttons |= SDL_JoystickGetButton(joystick[i], j) << j;
+				
+				//Nuevo sistema de detección de joystick durante la configuraciones de mandos del Openbor
+				if (SDL_JoystickGetButton(joystick[i], j) == 1 && (oldButtons & (0x01 << j)) == 0) { lastjoy = 1 + i * JOY_MAX_INPUTS + j; } //Si se ha presionado un botón, procedemos a cargarlo como la última interacción de un gamepad
+			}
 
 			// check axes
 			for(j = 0; j < joysticks[i].NumAxes; j++)
-			{
+			{				
 				axis = SDL_JoystickGetAxis(joystick[i], j);
-				if(axis < -1*T_AXIS)  { joysticks[i].Axes |= 0x01 << (j*2); }
-				if(axis >    T_AXIS)  { joysticks[i].Axes |= 0x02 << (j*2); }
+				if(axis < -1*T_AXIS)  { joysticks[i].Axes |= 0x01 << (j*2);}
+				if(axis >    T_AXIS)  { joysticks[i].Axes |= 0x02 << (j*2);}
+				
+				//Nuevo sistema de detección de joystick durante la configuraciones de mandos del Openbor
+				int axisfirst = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2 * j; //Optenemos el número de eje en el indice de Openbor
+				int axisNeg = oldAxes & (0x01 << (j*2));
+				int axisPos = oldAxes & (0x02 << (j*2));
+				if(axis < -1*T_AXIS && axisNeg == 0)  { lastjoy = axisfirst; }
+				if(axis >    T_AXIS && axisPos == 0)  { lastjoy = axisfirst + 1; }
 			}
 
 			// check hats
 			for(j = 0; j < joysticks[i].NumHats; j++)
             {
-                //joysticks[i].Hats |= SDL_JoystickGetHat(joystick[i], j) << (j*4);
-
+                //joysticks[i].Hats |= SDL_JoystickGetHat(joystick[i], j) << (j*4);				
                 Uint8 hat_value = SDL_JoystickGetHat(joystick[i], j);
                 if(hat_value & SDL_HAT_UP)      joysticks[i].Hats |= SDL_HAT_UP     << (j*4);
                 if(hat_value & SDL_HAT_RIGHT)   joysticks[i].Hats |= SDL_HAT_RIGHT  << (j*4);
                 if(hat_value & SDL_HAT_DOWN)    joysticks[i].Hats |= SDL_HAT_DOWN   << (j*4);
                 if(hat_value & SDL_HAT_LEFT)    joysticks[i].Hats |= SDL_HAT_LEFT   << (j*4);
+				
+				//Nuevo sistema de detección de joystick durante la configuraciones de mandos del Openbor
+				
+				if((hat_value & SDL_HAT_UP) && (oldHat & SDL_HAT_UP) == 0) {lastjoy = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2 * joysticks[i].NumAxes + 0; }
+				if((hat_value & SDL_HAT_RIGHT) && (oldHat & SDL_HAT_RIGHT) == 0) {lastjoy = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2 * joysticks[i].NumAxes + 1; }
+				if((hat_value & SDL_HAT_DOWN) && (oldHat & SDL_HAT_DOWN) == 0) {lastjoy = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2 * joysticks[i].NumAxes + 2; }
+				if((hat_value & SDL_HAT_LEFT) && (oldHat & SDL_HAT_LEFT) == 0) {lastjoy = 1 + i * JOY_MAX_INPUTS + joysticks[i].NumButtons + 2 * joysticks[i].NumAxes + 3; }
+				
             }
 
 			// combine axis, hat, and button state into a single value
@@ -375,14 +416,16 @@ void joystick_scan(int scan)
             // print JOY_MAX_INPUTS (32) spaces for alignment
             if(numjoy == 1)
             {
-                printf("%s - %d axes, %d buttons, %d hat(s)\n",
-                                    get_joystick_name(joysticks[i].Name), joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
-            }
+                //printf("%s - %d axes, %d buttons, %d hat(s)\n",
+                //                    get_joystick_name(joysticks[i].Name), joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
+				printf("%s - %d axes, %d buttons, %d hat(s)\n", joysticks[i].Name, joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
+			}
             else if(numjoy > 1)
             {
                 if(i) printf("\n");
-                printf("%d. %s - %d axes, %d buttons, %d hat(s)\n", i + 1,
-                        get_joystick_name(joysticks[i].Name), joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
+                //printf("%d. %s - %d axes, %d buttons, %d hat(s)\n", i + 1,
+                //        get_joystick_name(joysticks[i].Name), joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
+				printf("%d. %s - %d axes, %d buttons, %d hat(s)\n", i + 1,joysticks[i].Name, joysticks[i].NumAxes, joysticks[i].NumButtons, joysticks[i].NumHats);
             }
         }
 	}
@@ -404,7 +447,9 @@ void open_joystick(int i)
     joysticks[i].NumAxes = SDL_JoystickNumAxes(joystick[i]);
     joysticks[i].NumButtons = SDL_JoystickNumButtons(joystick[i]);
 
-    strcpy(joysticks[i].Name, SDL_JoystickName(i));
+    //strcpy(joysticks[i].Name, SDL_JoystickName(i));
+	strcpy(joysticks[i].Name, SDL_JoystickNameForIndex(i));
+	//printf("%d - %s\n",i, SDL_JoystickNameForIndex(i));
 
     joystick_haptic[i] = SDL_HapticOpenFromJoystick(joystick[i]);
     if (joystick_haptic[i] != NULL)
@@ -832,9 +877,9 @@ int is_touch_area(float x, float y)
 
 int keyboard_getlastkey()
 {
-		int i, ret = lastkey;
+		int ret = lastkey;
 		lastkey = 0;
-		for(i = 0; i < JOY_LIST_TOTAL; i++) joysticks[i].Buttons = 0;
+		//for(i = 0; i < JOY_LIST_TOTAL; i++) joysticks[i].Buttons = 0;
 		return ret;
 }
 
@@ -899,7 +944,7 @@ void control_update(s_playercontrols ** playercontrols, int numplayers)
 
         //White Dragon: Set input from default keys overriding previous keys
         //Default keys are available just if no configured keys are pressed!
-        if (player <= 0 && !k)
+        if (player == 0 && !k)
         {
             for(i = 0; i < JOY_MAX_INPUTS; i++)
             {

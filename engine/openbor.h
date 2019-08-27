@@ -82,13 +82,13 @@
 #define		MAX_ATTACKS			4					// Total number of attacks players have
 #define     MAX_FOLLOWS         4					// For followup animations
 #define     MAX_COLLISIONS      2                   // Collision boxes.
-#define		MAX_ARG_LEN			512
+#define		MAX_ARG_LEN			1024
 #define		MAX_ALLOWSELECT_LEN	1024
 #define		MAX_SELECT_LOADS   	512
 #define		MAX_PAL_SIZE		1024
 #define		MAX_CACHED_BACKGROUNDS 9
 #define     MAX_DOTS            10                  // Max active dot effects.
-#define     MAX_ARG_COUNT       64
+#define     MAX_ARG_COUNT       128
 
 /*
 Note: the min Z coordinate of the player is important
@@ -311,8 +311,8 @@ typedef enum
     FLAG_ATTACK2		= 0x00000400,
     FLAG_ATTACK3		= 0x00000800,
     FLAG_ATTACK4		= 0x00001000,
-    FLAG_ANYBUTTON		= (FLAG_START|FLAG_SPECIAL|FLAG_ATTACK|FLAG_ATTACK2|FLAG_ATTACK3|FLAG_ATTACK4|FLAG_JUMP),
-    FLAG_CONTROLKEYS    = (FLAG_SPECIAL|FLAG_ATTACK|FLAG_ATTACK2|FLAG_ATTACK3|FLAG_ATTACK4|FLAG_JUMP|FLAG_MOVEUP|FLAG_MOVEDOWN|FLAG_MOVELEFT|FLAG_MOVERIGHT),
+    FLAG_ANYBUTTON		= (FLAG_START|FLAG_SPECIAL|FLAG_ATTACK|FLAG_JUMP),
+    FLAG_CONTROLKEYS    = (FLAG_SPECIAL|FLAG_ATTACK|FLAG_JUMP|FLAG_MOVEUP|FLAG_MOVEDOWN|FLAG_MOVELEFT|FLAG_MOVERIGHT),
     FLAG_FORWARD		= 0x40000000,
     FLAG_BACKWARD		= 0x80000000
 } e_key_def;
@@ -2414,6 +2414,9 @@ typedef struct entity
     int (*takedamage)(struct entity *, s_collision_attack *, int);
     int (*trymove)(float, float);
     unsigned int attack_id_incoming;
+    unsigned int attack_id_incoming2; //Variables agregas para memorizar las últimas 4 cajas de impactos y evitar el bug del "chorricombo"
+    unsigned int attack_id_incoming3;
+    unsigned int attack_id_incoming4;
     unsigned int attack_id_outgoing;
     int hitwall; // == 1 in the instant that hit the wall/platform/obstacle, else == 0
     unsigned char *colourmap;

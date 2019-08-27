@@ -468,7 +468,7 @@ int searchList(const char *list[], const char *value, int length)
         {
             high = mid-1;
         }
-
+	//printf("searchList: %s %s %d %d %d \n", list[mid], value, low, mid, high); //TAG_YO
     }
 
     return -1;
