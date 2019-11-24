@@ -417,6 +417,7 @@ List *createModelCommandList(void)
     LIST_ADD(CMD_MODEL_SCROLL, "scroll");
     LIST_ADD(CMD_MODEL_SEAL, "seal");
     LIST_ADD(CMD_MODEL_SECRET, "secret");
+	LIST_ADD(CMD_MODEL_SELECTCOL, "selectcol");
     LIST_ADD(CMD_MODEL_SETA, "seta");
     LIST_ADD(CMD_MODEL_SETLAYER, "setlayer");
     LIST_ADD(CMD_MODEL_SHADOW, "shadow");

@@ -184,6 +184,13 @@ case $1 in
 #                                                                          #
 ############################################################################
 5)
+	export WINDEV=../tools/win-sdk/bin
+	export SDKPATH=../tools/win-sdk
+	export EXTENSION=.exe
+	export PATH=$TOOLS:$WINDEV
+	;;
+
+15)
    if test -e "/usr/i586-mingw32msvc"; then
      export WINDEV=/usr/bin
      export SDKPATH=/usr/i586-mingw32msvc

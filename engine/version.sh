@@ -52,6 +52,7 @@ get_revnum
 VERSION_NAME="OpenBOR"
 VERSION_MAJOR=3
 VERSION_MINOR=0
+VERSION_BUILD="6330 LNS v0.10d"
 VERSION_DATE=`date '+%Y%m%d%H%M%S'`
 export VERSION="v$VERSION_MAJOR.$VERSION_MINOR Build $VERSION_BUILD"
 }
@@ -140,7 +141,7 @@ All Rights Reserved</string>
         <string>spk</string>
       </array>
       <key>CFBundleTypeIconFile</key>
-      <string>OpenBOR.icns</string>
+      <string>OpenBOR.ico</string>
       <key>CFBundleTypeName</key>
       <string>PAK File</string>
       <key>CFBundleTypeOSTypes</key>
@@ -153,7 +154,7 @@ All Rights Reserved</string>
     </dict>
     <dict>
       <key>CFBundleTypeIconFile</key>
-      <string>OpenBOR.icns</string>
+      <string>OpenBOR.ico</string>
       <key>CFBundleTypeName</key>
       <string>SPK File</string>
       <key>CFBundleTypeRole</key>

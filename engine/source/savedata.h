@@ -56,6 +56,7 @@ typedef struct
 #if ANDROID
     int is_touchpad_vibration_enabled;
 #endif
+	int vsync; // Sync to monitor refresh (1) or don't (0)
 } s_savedata;
 
 extern s_savedata     savedata;

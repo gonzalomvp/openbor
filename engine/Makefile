@@ -53,7 +53,7 @@ BUILD_VORBIS    = 1
 BUILD_WEBM      = 1
 BUILDING        = 1
 YASM 	        = yasm$(EXTENSION)
-CC              = $(WINDEV)/$(PREFIX)gcc$(EXTENSION)
+CC              = gcc$(EXTENSION)
 INCLUDES        = $(SDKPATH)/include \
                   $(SDKPATH)/include/SDL2
 LIBRARIES       = $(SDKPATH)/lib
@@ -81,21 +81,16 @@ BUILD_VORBIS    = 1
 BUILD_WEBM      = 1
 BUILDING        = 1
 YASM 	        = yasm
-CC  	        = $(LNXDEV)/$(PREFIX)gcc
+CC  	        = gcc
 OBJTYPE         = elf
 INCLUDES        = $(SDKPATH)/include
-ifeq ($(findstring 64, $(GCC_TARGET)), 64)
+
 TARGET_ARCH     = amd64
 BUILD_AMD64     = 1
 ARCHFLAGS       = -m64
 LIBRARIES       = $(SDKPATH)/lib/$(GCC_TARGET)
 CFLAGS          += -DAMD64
-else
-TARGET_ARCH     = x86
-ARCHFLAGS       = -m32
-LIBRARIES       = $(SDKPATH)/lib32
-BUILD_MMX       = 1
-endif
+
 ifeq ($(BUILD_LINUX), 0)
 BUILD_DEBUG     = 1
 endif
@@ -190,10 +185,10 @@ STRIP           = cp $(TARGET) $(TARGET_FINAL)
 ifndef BUILD_DEBUG
 ifndef NO_STRIP
 ifdef BUILD_WIN
-STRIP 	        = $(WINDEV)/$(PREFIX)strip$(EXTENSION) $(TARGET) -o $(TARGET_FINAL)
+STRIP 	        = strip$(EXTENSION) $(TARGET) -o $(TARGET_FINAL)
 endif
 ifdef BUILD_LINUX
-STRIP 	        = $(LNXDEV)/$(PREFIX)strip $(TARGET) -o $(TARGET_FINAL)
+STRIP 	        = strip $(TARGET) -o $(TARGET_FINAL)
 endif
 ifdef BUILD_DARWIN
 STRIP           = $(PREFIX)strip $(TARGET) -o $(TARGET_FINAL)
@@ -442,8 +437,9 @@ OBJS            = $(MAIN)                                                       
 #----------------------------------------------------------------------------------------------------
 
 CFLAGS 	       += $(addprefix -I", $(addsuffix ", $(INCS))) $(ARCHFLAGS) -D$(TARGET_PLATFORM)
-CFLAGS 	       += -g -Wall -Werror -fsigned-char -std=gnu99
-
+#CFLAGS 	       += -g -Wall -Werror -fsigned-char -std=gnu99
+#-Wno-unused-variable
+CFLAGS 	       += -g -Wall -fsigned-char -std=gnu99 
 
 ifndef BUILD_DARWIN
 ifdef BUILD_LINUX

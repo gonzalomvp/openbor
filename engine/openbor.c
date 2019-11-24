@@ -34,6 +34,8 @@ s_savedata savedata;
 //  Global Variables                                                        //
 /////////////////////////////////////////////////////////////////////////////
 
+int finisheds_games_count = 0;
+
 a_playrecstatus *playrecstatus = NULL;
 
 s_set_entry *levelsets = NULL;
@@ -203,6 +205,8 @@ float min_noatk_chance = 0.0f;
 float max_noatk_chance = 0.6f;
 float offscreen_noatk_factor = 0.5f;
 float noatk_duration = 0.75f;
+
+//int default_model_selectcol = 0;
 
 char                *custScenes = NULL;
 char                *custBkgrds = NULL;
@@ -1634,11 +1638,11 @@ void execute_onblocko_script(entity *ent, int plane, entity *other)
         ScriptVariant_ChangeType(&tempvar, VT_PTR);
         tempvar.ptrVal = (VOID *)ent;
         Script_Set_Local_Variant(cs, "self",        &tempvar);
-        ScriptVariant_ChangeType(&tempvar, VT_INTEGER);
+		ScriptVariant_ChangeType(&tempvar, VT_INTEGER);
         tempvar.lVal = (LONG)plane;
         Script_Set_Local_Variant(cs, "plane",      &tempvar);
         ScriptVariant_ChangeType(&tempvar, VT_PTR);
-        tempvar.ptrVal = (VOID *)other;
+		tempvar.ptrVal = (VOID *)other;
         Script_Set_Local_Variant(cs, "obstacle",    &tempvar);
         Script_Execute(cs);
 
@@ -2409,6 +2413,7 @@ void clearsettings()
     savedata.uselog = 1;
     savedata.debuginfo = 0;
     savedata.fullscreen = 0;
+    savedata.vsync = 1;
     savedata.stretch = 0;
 
     savedata.swfilter = 0;
@@ -2622,6 +2627,8 @@ int loadGameFile()
             {
                 bonus += savelevel[i].times_completed;
             }
+            //printf("Bonus: %d \n",bonus);
+            finisheds_games_count = bonus; //TAG_YO Cargamos el número de veces que se ha pasado el juego en la variable global finisheds_games_count
     }
 
     fclose(handle);
@@ -4693,6 +4700,42 @@ s_model *nextplayermodel(s_model *current)
     return NULL;
 }
 
+s_model *nextplayermodelcol(s_model *current)
+{
+	 int i;
+    int curindex = -1;
+    int loops;
+    if(current)
+    {
+        // Find index of current player model
+        for(i = 0; i < models_cached; i++)
+        {
+            if(model_cache[i].model == current)
+            {
+                curindex = i;
+                break;
+            }
+        }
+    }
+    // Find next player model (first one after current index)
+    for(i = curindex + 1, loops = 0; loops < models_cached; i++, loops++)
+    {
+        if(i >= models_cached)
+        {
+            i = 0;
+        }
+        if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
+                (allow_secret_chars || !model_cache[i].model->secret) &&
+                model_cache[i].model->clearcount <= bonus && model_cache[i].selectable && model_cache[i].model->selectcol == current->selectcol )
+        {
+            //printf("next %s\n", model_cache[i].model->name);
+            return model_cache[i].model;
+        }
+    }
+    borShutdown(1, "Fatal: can't find any player models!");
+    return NULL;
+}
+
 s_model *nextplayermodeln(s_model *current, int p)
 {
     int i;
@@ -4767,6 +4810,42 @@ s_model *prevplayermodel(s_model *current)
         if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
                 (allow_secret_chars || !model_cache[i].model->secret) &&
                 model_cache[i].model->clearcount <= bonus && model_cache[i].selectable)
+        {
+            //printf("prev %s\n", model_cache[i].model->name);
+            return model_cache[i].model;
+        }
+    }
+    borShutdown(1, "Fatal: can't find any player models!");
+    return NULL;
+}
+
+s_model *prevplayermodelcol(s_model *current)
+{
+	 int i;
+    int curindex = -1;
+    int loops;
+    if(current)
+    {
+        // Find index of current player model
+        for(i = 0; i < models_cached; i++)
+        {
+            if(model_cache[i].model == current)
+            {
+                curindex = i;
+                break;
+            }
+        }
+    }
+    // Find next player model (first one after current index)
+    for(i = curindex - 1, loops = 0; loops < models_cached; i--, loops++)
+    {
+        if(i < 0)
+        {
+            i = models_cached - 1;
+        }
+        if(model_cache[i].model && model_cache[i].model->type == TYPE_PLAYER &&
+                (allow_secret_chars || !model_cache[i].model->secret) &&
+                model_cache[i].model->clearcount <= bonus && model_cache[i].selectable && model_cache[i].model->selectcol == current->selectcol)
         {
             //printf("prev %s\n", model_cache[i].model->name);
             return model_cache[i].model;
@@ -8303,6 +8382,7 @@ s_model *init_model(int cacheindex, int unload)
     newchar->edgerange.z        = 0;
     newchar->boomerang_prop.acceleration     = 0;
     newchar->boomerang_prop.hdistance        = 0;
+	newchar->selectcol			= 0;
 
     // Default Attack1 in chain must be referenced if not used.
     for(i = 0; i < MAX_ATCHAIN; i++)
@@ -9416,6 +9496,9 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 break;
             case CMD_MODEL_CREDIT:
                 newchar->credit = GET_INT_ARG(1);
+                break;
+			case CMD_MODEL_SELECTCOL:
+                newchar->selectcol = GET_INT_ARG(1);                    // 30-12-2004 and store for character
                 break;
             case CMD_MODEL_NOPAIN:
                 newchar->nopain = GET_INT_ARG(1);
@@ -19231,6 +19314,7 @@ void do_attack(entity *e)
             new_attack_id = 1;
         }
         e->attack_id_outgoing = current_attack_id = new_attack_id;
+	//printf("Attack_id %d \n", new_attack_id); //TAG_YO
     }
 
 
@@ -19319,8 +19403,9 @@ void do_attack(entity *e)
         }
 
         // Attack IDs must be different.
-        if(target->attack_id_incoming == current_attack_id && !attack->ignore_attack_id)
+        if((target->attack_id_incoming == current_attack_id || target->attack_id_incoming2 == current_attack_id || target->attack_id_incoming3 == current_attack_id || target->attack_id_incoming4 == current_attack_id ) && !attack->ignore_attack_id)
         {
+	    //printf("ACA SE INGORA ATAQUE POR TENER EL ID MEMORIZADO: %d - Ignore %d \n",current_attack_id,attack->ignore_attack_id);
             continue;
         }
 
@@ -19436,7 +19521,7 @@ void do_attack(entity *e)
                       inair(self) ||
                       self->frozen ||
                       (self->direction == e->direction && self->modeldata.blockback < 1) ||                       // Can't block an attack that is from behind unless blockback flag is enabled
-                      (!self->idling && self->attacking != ATTACKING_INACTIVE)) &&                                                 // Can't block if busy, attack <0 means the character is preparing to attack, he can block during this time
+                      (!self->idling && self->attacking >= 0)) &&                                                 // Can't block if busy, attack <0 means the character is preparing to attack, he can block during this time
                     attack->no_block <= self->defense[attack->attack_type].blockpower &&       // If unblockable, will automatically hit
                     (rand32()&self->modeldata.blockodds) == 1 && // Randomly blocks depending on blockodds (1 : blockodds ratio)
                     (!self->modeldata.thold || (self->modeldata.thold > 0 && self->modeldata.thold > force)) &&
@@ -19590,6 +19675,9 @@ void do_attack(entity *e)
                             self->modeldata.animation[current_follow_id]->attackone = self->animation->attackone;
                         }
                         ent_set_anim(self, current_follow_id, 0);
+			self->attack_id_incoming4 = self->attack_id_incoming3;
+			self->attack_id_incoming3 = self->attack_id_incoming2;
+			self->attack_id_incoming2 = self->attack_id_incoming;
                         self->attack_id_incoming = current_attack_id;
                     }
 
@@ -19712,7 +19800,10 @@ void do_attack(entity *e)
                 }
                 //followed = 1; // quit loop, animation is changed
             }//end of if #055
-
+            
+            self->attack_id_incoming4 = self->attack_id_incoming3;
+	    self->attack_id_incoming3 = self->attack_id_incoming2;
+	    self->attack_id_incoming2 = self->attack_id_incoming;
             self->attack_id_incoming = current_attack_id;
             if(self == def)
             {
@@ -22253,7 +22344,13 @@ int set_riseattack(entity *iRiseattack, int type, int reset)
     {
         type = 0;
     }
-
+    if( (!validanim(iRiseattack, animriseattacks[type]) ||
+        (iRiseattack->inbackpain && !validanim(iRiseattack, animbackriseattacks[type]) && !validanim(iRiseattack, animriseattacks[type]))) &&
+       iRiseattack->modeldata.riseattacktype == 3 )
+    {
+        return 0;
+    }
+    
     if ( iRiseattack->inbackpain ) riseattack = animbackriseattacks[type];
     else riseattack = animriseattacks[type];
 
@@ -22291,6 +22388,7 @@ int set_riseattack(entity *iRiseattack, int type, int reset)
     iRiseattack->rising = 0;
     iRiseattack->riseattacking = 1;
     iRiseattack->drop = 0;
+    iRiseattack->projectile = 0; //TAG_YO, agregado para evitar el bug que cuando el enemigo haga un riseattack siga siendo considerado un proyectil.
     iRiseattack->nograb = iRiseattack->nograb_default; //iRiseattack->nograb = 0;
     iRiseattack->modeldata.jugglepoints.current = iRiseattack->modeldata.jugglepoints.max; //reset jugglepoints
     return 1;
@@ -24505,7 +24603,7 @@ int common_try_runattack(entity *target)
 
     if(target)
     {
-        if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking != ATTACKING_INACTIVE))
+        if(!target->animation->vulnerable[target->animpos] && (target->drop || target->attacking))
         {
             return 0;
         }
@@ -24533,7 +24631,7 @@ int common_try_block(entity *target)
     }
 
     // no passive block, so block by himself :)
-    if(target && target->attacking != ATTACKING_INACTIVE)
+    if(target && target->attacking)
     {
         self->takeaction = common_block;
         set_blocking(self);
@@ -27332,7 +27430,8 @@ int projectile_wall_deflect(entity *ent)
     #define RICHOCHET_VELOCITY_X_FACTOR 0.25    // This value is multiplied by current velocity to get an X velocity value to bounce off wall..
     #define RICHOCHET_VELOCITY_Y        2.5     // Base Y velocity applied when projectile bounces off wall.
     #define RICHOCHET_VELOCITY_Y_RAND   1       // Random seed for Y variance added to base Y velocity when bouncing off wall.
-
+    //He borrado todo el sistema de rebote para evitar el bug que destruye los misiles cuando se genera una caja de colisión dentro de una plataforma.
+/*
     float richochet_velocity_x;
     s_collision_attack attack;
 
@@ -27372,7 +27471,7 @@ int projectile_wall_deflect(entity *ent)
             return 1;
         }
     }
-
+*/
     // Did not ricochet, so return false.
     return 0;
 
@@ -27857,7 +27956,7 @@ int star_move()
             self->animating = 0;
         }
     }
-
+	
     return 1;
 }
 
@@ -34217,7 +34316,7 @@ void apply_controls()
         control_setkey(playercontrolpointers[p], FLAG_JUMP,       savedata.keys[p][SDID_JUMP]);
         control_setkey(playercontrolpointers[p], FLAG_SPECIAL,    savedata.keys[p][SDID_SPECIAL]);
         control_setkey(playercontrolpointers[p], FLAG_START,      savedata.keys[p][SDID_START]);
-        control_setkey(playercontrolpointers[p], FLAG_SCREENSHOT, savedata.keys[p][SDID_SCREENSHOT]);
+        if (p==0){ control_setkey(playercontrolpointers[p], FLAG_SCREENSHOT, savedata.keys[p][SDID_SCREENSHOT]);}
     }
 }
 
@@ -35841,18 +35940,30 @@ int selectplayer(int *players, char *filename, int useSavedGame)
                     {
                         sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
                     }
-                    ent_set_model(example[i], ((player[i].newkeys & FLAG_MOVELEFT) ? prevplayermodeln : nextplayermodeln)(example[i]->model, i)->name, 0);
+                    ent_set_model(example[i], ((player[i].newkeys & FLAG_MOVELEFT) ? prevplayermodeln : nextplayermodeln)(example[i]->model,i)->name,0);
                     strcpy(player[i].name, example[i]->model->name);
                     player[i].colourmap = (colourselect && (set->nosame & 2)) ? nextcolourmapn(example[i]->model, -1, i) : 0;
                     ent_set_colourmap(example[i], player[i].colourmap);
                 }
+				else if(player[i].newkeys & (FLAG_MOVEUP | FLAG_MOVEDOWN) && example[i])
+				{
+					if(SAMPLE_BEEP >= 0)
+                    {
+                        sound_play_sample(SAMPLE_BEEP, 0, savedata.effectvol, savedata.effectvol, 100);
+                    }
+                    ent_set_model(example[i], ((player[i].newkeys & FLAG_MOVEUP) ? prevplayermodelcol : nextplayermodelcol)(example[i]->model)->name, 0);
+
+                    strcpy(player[i].name, example[i]->model->name);
+                    player[i].colourmap = (colourselect && (set->nosame & 2)) ? nextcolourmapn(example[i]->model, -1, i) : 0;
+                    ent_set_colourmap(example[i], player[i].colourmap);
+				}
                 // oooh pretty colors! - selectable color scheme for player characters
-                else if(player[i].newkeys & (FLAG_MOVEUP | FLAG_MOVEDOWN) && colourselect && example[i])
+                else if(player[i].newkeys & (FLAG_JUMP | FLAG_SPECIAL) && colourselect && example[i])
                 {
-                    player[i].colourmap = ((player[i].newkeys & FLAG_MOVEUP) ? nextcolourmapn : prevcolourmapn)(example[i]->model, player[i].colourmap, i);
+                    player[i].colourmap = ((player[i].newkeys & FLAG_JUMP) ? nextcolourmapn : prevcolourmapn)(example[i]->model, player[i].colourmap, i);
                     ent_set_colourmap(example[i], player[i].colourmap);
                 }
-                else if((player[i].newkeys & FLAG_ANYBUTTON) && example[i])
+                else if((player[i].newkeys & FLAG_ATTACK) && example[i])
                 {
                     if(SAMPLE_BEEP2 >= 0)
                     {
@@ -36142,7 +36253,7 @@ int menu_difficulty()
 {
     int quit = 0;
     int selector = 0;
-    int maxdisplay = 5;
+    int maxdisplay = 9; //TAG_YO cambiado el máximo de opciones que se puedes mostrar de forma simultanea en el menú de selección de modos
     int i, j, t;
     //float slider = 0;
     int barx, bary, barw, barh;
@@ -36162,7 +36273,7 @@ int menu_difficulty()
     {
         if(num_difficulties > 1)
         {
-            _menutextm(2, -2, 0, Tr("Game Mode"));
+            _menutextm(2, -5, 0, Tr("Game Mode"));
             t = (selector - (selector == num_difficulties)) / maxdisplay * maxdisplay;
             for(j = 0, i = t; i < maxdisplay + t && i < num_difficulties; j++, i++)
             {
@@ -36170,17 +36281,17 @@ int menu_difficulty()
                 {
                     if(bonus >= levelsets[i].ifcomplete)
                     {
-                        _menutextm((selector == i), j, 0, "%s", levelsets[i].name);
+                        _menutextm((selector == i), j-2, 0, "%s", levelsets[i].name);
                     }
                     else
                     {
                         if(levelsets[i].ifcomplete > 1)
                         {
-                            _menutextm((selector == i), j, 0, Tr("%s - Finish Game %i Times To UnLock"), levelsets[i].name, levelsets[i].ifcomplete);
+                            _menutextm((selector == i), j-2, 0, Tr("%s - Finish Game %i Times To UnLock"), levelsets[i].name, levelsets[i].ifcomplete);
                         }
                         else
                         {
-                            _menutextm((selector == i), j, 0, Tr("%s - Finish Game To UnLock"), levelsets[i].name);
+                            _menutextm((selector == i), j-2, 0, Tr("%s - Finish Game To UnLock"), levelsets[i].name);
                         }
                     }
                 }
@@ -36189,7 +36300,7 @@ int menu_difficulty()
                     break;
                 }
             }
-            _menutextm((selector == i), 6, 0, Tr("Back"));
+            _menutextm((selector == i), 8, 0, Tr("Back"));
 
             //draw the scroll bar
             if(num_difficulties > maxdisplay)
@@ -36442,7 +36553,7 @@ int choose_mode(int *players)
 
     while(!quit)
     {
-        _menutextm(2, 1, 0, Tr("Choose Mode"));
+        _menutextm(2, -5, 0, Tr("Choose Mode"));
         _menutextm((selector == 0), 3, 0, Tr("New Game"));
         _menutextm((selector == 1), 4, 0, Tr("Load Game"));
         _menutextm((selector == 2), 6, 0, Tr("Back"));
@@ -36934,7 +37045,7 @@ void keyboard_setup(int player)
     while(!quit)
     {
         voffset = -6;
-        _menutextm(2, -8, 0, Tr("Player %i"), player + 1);
+        _menutextm(2, -5, 0, Tr("Player %i"), player + 1);
         for(i = 0; i < btnnum; i++)
         {
             if(!disabledkey[i])
@@ -37012,6 +37123,7 @@ void keyboard_setup(int player)
             if(selector < 0)
             {
                 selector = OPTIONS_NUM;
+				//clear_lastjoy();
             }
             if(selector > OPTIONS_NUM)
             {
@@ -37096,7 +37208,7 @@ void menu_options_input()
 
     while(!quit)
     {
-        _menutextm(2, x_pos-1, 0, Tr("Control Options"));
+        _menutextm(2, -5, 0, Tr("Control Options"));
 
         #if PSP
         if(savedata.usejoy)
@@ -37537,7 +37649,7 @@ void menu_options_debug()
     while(!quit)
     {
         // Display menu title.
-        _menutextm(2, MENU_POS_Y, 0, Tr("Debug Settings"));
+        _menutextm(2, -5, 0, Tr("Debug Settings"));
 
         // Menu items.
         // Y position is controlled by a incremented integer.
@@ -37709,7 +37821,7 @@ void menu_options_system()
 
     while(!quit)
     {
-        _menutextm(2, SYS_OPT_Y_POS-2, 0, Tr("System Options"));
+        _menutextm(2, -5, 0, Tr("System Options"));
 
         _menutext(0, col1, SYS_OPT_Y_POS, Tr("Total RAM:"));
         _menutext(0, col2, SYS_OPT_Y_POS, Tr("%s KB"), commaprint(getSystemRam(KBYTES)));
@@ -37983,23 +38095,26 @@ void menu_options_video()
 
         _menutext((selector == 7), col1, 4, Tr("Software Filter:"));
         _menutext((selector == 7), col2, 4, ((savedata.hwscale >= 2.0 || savedata.fullscreen) ? Tr(GfxBlitterNames[savedata.swfilter]) : Tr("Disabled")));
+        
+        _menutext((selector == 8), col1, 5, Tr("VSync:"));
+        _menutext((selector == 8), col2, 5, savedata.vsync ? "Enabled" : "Disabled");
 
         if(savedata.fullscreen)
         {
-            _menutext((selector == 8), col1, 5, Tr("Fullscreen Type:"));
-            _menutext((selector == 8), col2, 5, (savedata.stretch ? Tr("Stretch to Screen") : Tr("Preserve Aspect Ratio")));
+            _menutext((selector == 9), col1, 6, Tr("Fullscreen Type:"));
+            _menutext((selector == 9), col2, 6, (savedata.stretch ? Tr("Stretch to Screen") : Tr("Preserve Aspect Ratio")));
         }
-        else if(selector == 8)
+        else if(selector == 9)
         {
-            selector = (bothnewkeys & FLAG_MOVEUP) ? 7 : 9;
+            selector = (bothnewkeys & FLAG_MOVEUP) ? 8 : 10;
         }
 
-        _menutextm((selector == 9), 7, 0, Tr("Back"));
+        _menutextm((selector == 10), 8, 0, Tr("Back"));
         if(selector < 0)
         {
-            selector = 9;
+            selector = 10;
         }
-        if(selector > 9)
+        if(selector > 10)
         {
             selector = 0;
         }
@@ -38279,6 +38394,10 @@ void menu_options_video()
 				video_set_mode(videomodes);
                 break;
             case 8:
+                savedata.vsync = !savedata.vsync;
+                video_set_mode(videomodes);
+                break;
+            case 9:
                 video_stretch((savedata.stretch ^= 1));
                 break;
 #endif
@@ -38333,7 +38452,7 @@ void menu_options()
 
     while(!quit)
     {
-        if (!cheats || forcecheatsoff) _menutextm(2, y_offset-1, 0, Tr("Options")); else _menutextm(2, y_offset-1, 0, Tr("Cheat Options"));
+        if (!cheats || forcecheatsoff) _menutextm(2, -5, 0, Tr("Options")); else _menutextm(2, -5, 0, Tr("Cheat Options"));
 
         _menutextm((selector == VIDEO_OPTION), y_offset+VIDEO_OPTION, 0, Tr("Video Options..."));
         _menutextm((selector == SOUND_OPTION), y_offset+SOUND_OPTION, 0, Tr("Sound Options..."));
@@ -38548,7 +38667,7 @@ void openborMain(int argc, char **argv)
     int i;
     int argl;
 
-    printf("OpenBoR %s, Compile Date: " __DATE__ "\n\n", VERSION);
+    printf("OpenBoR %s Compile Date: " __DATE__ "\n\n", VERSION);
 
     if(argc > 1)
     {
@@ -38712,6 +38831,7 @@ void openborMain(int argc, char **argv)
                     for(i = 0; i < MAX_PLAYERS; i++)
                     {
                         players[i] = player[i].newkeys & (FLAG_ANYBUTTON);
+			//printf("Valor i=%d, newkeys=%d\n",i,player[i].newkeys); //TAG_YO
                     }
                     relback = choose_mode(players);
                     if(relback)

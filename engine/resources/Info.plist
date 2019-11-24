@@ -27,7 +27,7 @@ All Rights Reserved</string>
   <key>CFBundleExecutable</key>
   <string>OpenBOR</string>
   <key>CFBundleVersion</key>
-  <string></string>
+  <string>6330 LNS v0.9d</string>
   <key>CFBundleDevelopmentRegion</key>
   <string>English</string>
   <key>CFBundleInfoDictionaryVersion</key>
@@ -49,7 +49,7 @@ All Rights Reserved</string>
         <string>spk</string>
       </array>
       <key>CFBundleTypeIconFile</key>
-      <string>OpenBOR.icns</string>
+      <string>OpenBOR.ico</string>
       <key>CFBundleTypeName</key>
       <string>PAK File</string>
       <key>CFBundleTypeOSTypes</key>
@@ -62,7 +62,7 @@ All Rights Reserved</string>
     </dict>
     <dict>
       <key>CFBundleTypeIconFile</key>
-      <string>OpenBOR.icns</string>
+      <string>OpenBOR.ico</string>
       <key>CFBundleTypeName</key>
       <string>SPK File</string>
       <key>CFBundleTypeRole</key>
