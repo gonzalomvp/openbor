@@ -14044,8 +14044,23 @@ void unload_level()
         temp = getFirstModel();
         do
         {
-            free_model(temp);
-            temp = getNextModel();
+            if(!temp)
+            {
+                break;
+            }
+            if((temp->unload & 2))
+            {
+                cache_model_sprites(temp, 0);
+            }
+            if((temp->unload & 1))
+            {
+                free_model(temp);
+                temp = getCurrentModel();
+            }
+            else
+            {
+                temp = getNextModel();
+            }
         }
         while(temp);
         printf("RAM Status:\n");
