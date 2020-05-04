@@ -14178,7 +14178,6 @@ getentity_error:
 //loadmodel(name)
 HRESULT openbor_loadmodel(ScriptVariant **varlist , ScriptVariant **pretvar, int paramCount)
 {
-    printf("openbor_loadmodel with %d params\n", paramCount);
     LONG unload = 0;
     s_model *model;
     if(paramCount < 1)

@@ -8471,7 +8471,7 @@ void update_model_loadflag(s_model *model, char unload)
 
 s_model *load_cached_model(char *name, char *owner, char unload)
 {
-    printf("load_cached_model with Unload value = %d\n", unload);
+
     #define LOG_CMD_TITLE   "%-20s"
 
     s_model *newchar = NULL,
