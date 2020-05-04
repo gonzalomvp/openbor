@@ -14045,7 +14045,7 @@ void unload_level()
         do
         {
             free_model(temp);
-            temp = getCurrentModel();
+            temp = getNextModel();
         }
         while(temp);
         printf("RAM Status:\n");
