@@ -207,6 +207,7 @@ HRESULT ScriptVariant_IntegerValue(ScriptVariant *var, LONG *pVal)
     if(var->vt == VT_INTEGER)
     {
         *pVal = var->lVal;
+        printf("Unload value = %d\n", *pVal);
     }
     else if(var->vt == VT_DECIMAL)
     {
