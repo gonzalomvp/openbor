@@ -4200,7 +4200,7 @@ void cachesprite(int index, int load)
                         free(sprite);
                         map_node->sprite = NULL;
 
-                        //printf("uncached sprite: %s\n", map_node->filename);
+                        printf("uncached sprite: %s\n", map_node->filename);
                     }
                 }
             }
