@@ -14422,7 +14422,7 @@ void load_level(char *filename)
             tempmodel = findmodel(GET_ARG(1));
             if (!tempmodel)
             {
-                load_cached_model(GET_ARG(1), filename, GET_INT_ARG(2));
+                load_cached_model(GET_ARG(1), filename, 1);
             }
             else
             {
