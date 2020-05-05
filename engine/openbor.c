@@ -8774,7 +8774,7 @@ s_model *load_cached_model(char *name, char *owner, char unload)
                 tempmodel = findmodel(value);
                 if(!tempmodel)
                 {
-                    load_cached_model(value, name, 1);
+                    load_cached_model(value, name, GET_INT_ARG(2));
                 }
                 else
                 {
@@ -14422,7 +14422,7 @@ void load_level(char *filename)
             tempmodel = findmodel(GET_ARG(1));
             if (!tempmodel)
             {
-                load_cached_model(GET_ARG(1), filename, 1);
+                load_cached_model(GET_ARG(1), filename, GET_INT_ARG(2));
             }
             else
             {
@@ -35739,7 +35739,7 @@ int selectplayer(int *players, char *filename, int useSavedGame)
                     tempmodel = findmodel(GET_ARG(1));
                     if (!tempmodel)
                     {
-                        load_cached_model(GET_ARG(1), filename, 1);
+                        load_cached_model(GET_ARG(1), filename, GET_INT_ARG(2));
                     }
                     else
                     {
