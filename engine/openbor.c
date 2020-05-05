@@ -14047,7 +14047,6 @@ void unload_level()
             {
                 break;
             }
-            printf("Model Unloading: '%s' %d\n", temp->name, temp->unload);
             if((temp->unload & 2))
             {
                 cache_model_sprites(temp, 0);
