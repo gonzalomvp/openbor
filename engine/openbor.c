@@ -4198,9 +4198,9 @@ void cachesprite(int index, int load, bool debug)
                         // index for the sprite map position.
                         sprite = loadsprite2(map_node->filename, NULL, NULL);
                         map_node->sprite = sprite;
+                        printf("cached index: %d sprite: %s\n", index, map_node->filename);
                         if(debug)
                         {
-                          printf("cached sprite: %s\n", map_node->filename);
                           map_node = sprite_map[index].node;
                           if(map_node && map_node->sprite)
                           {
@@ -4231,7 +4231,7 @@ void cachesprite(int index, int load, bool debug)
                         free(sprite);
                         map_node->sprite = NULL;
 
-                        printf("uncached sprite: %s\n", map_node->filename);
+                        printf("uncached index: %d sprite: %s\n", index, map_node->filename);
                     }
                 }
             }
