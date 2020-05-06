@@ -4150,10 +4150,16 @@ void cachesound(int index, int load)
 //
 // index: Target index in the sprite list.
 // load: Load 1, or unload 0 the target sprite index.
-void cachesprite(int index, int load)
+void cachesprite(int index, int load, bool debug)
 {
     s_sprite *sprite;           // Sprite placeholder.
     s_sprite_list *map_node;    // Sprite map node placeholder.
+    
+    if(debug)
+    {
+      printf("sprites loaded: %d\n", sprites_loaded);
+      printf("cachesprite index: %d, load: %d\n", index, load);
+    }
 
     // Valid sprite list?
     if(sprite_map)
@@ -4168,6 +4174,12 @@ void cachesprite(int index, int load)
                 // Get the sprite list node from sprite maps
                 // using our target index.
                 map_node = sprite_map[index].node;
+                
+                if(debug && map_node)
+                {
+                  printf("map_node: %p\n", map_node);
+                  printf("sprite: %s\n", map_node->filename);
+                }
 
                 // If load is true, then we want to load
                 // a sprite and assign it the target index.
@@ -4186,6 +4198,25 @@ void cachesprite(int index, int load)
                         // index for the sprite map position.
                         sprite = loadsprite2(map_node->filename, NULL, NULL);
                         map_node->sprite = sprite;
+                        if(debug)
+                        {
+                          printf("cached sprite: %s\n", map_node->filename);
+                          map_node = sprite_map[index].node;
+                          if(map_node && map_node->sprite)
+                          {
+                            printf("cached sprite verified: %s\n", map_node->filename);
+                            printf("\tmap_node: %p\n", map_node);
+                            printf("\tmap_node->sprite: %p\n", map_node->sprite);
+                          }
+                        }
+                    }
+                    else
+                    {
+                      if(debug)
+                      {
+                        printf("sprite already cached: %s\n", map_node->filename);
+                        printf("\tmap_node->sprite: %p\n", sprite);
+                      }
                     }
                 }
                 else if(!load)
@@ -5254,6 +5285,9 @@ void cache_model_sprites(s_model *m, int ld)
 {
     int i, f, instance;
     s_anim *anim;
+    
+    bool bDebug = strcmp(m->name, "Bret_2");
+    
     cachesprite(m->icon.def, ld);
     cachesprite(m->icon.die, ld);
     cachesprite(m->icon.get, ld);
