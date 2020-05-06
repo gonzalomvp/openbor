@@ -8645,7 +8645,10 @@ s_model *load_cached_model(char *name, char *owner, char unload)
     // Model already loaded but we might want to unload after level is completed.
     if((tempmodel = findmodel(name)) != NULL)
     {
-        update_model_loadflag(tempmodel, unload);
+        if(unload != 4)
+        {
+            update_model_loadflag(tempmodel, unload);
+        }
         cache_model_sprites(tempmodel, 1);
         return tempmodel;
     }
@@ -8675,7 +8678,7 @@ s_model *load_cached_model(char *name, char *owner, char unload)
     scriptbuf[0] = 0;
 
     //_peek_model_name(cacheindex);
-    newchar = init_model(cacheindex, unload);
+    newchar = init_model(cacheindex, unload == 4 ? 3 : unload);
     //newchar->name = name;
 
     //attention, we increase models_loaded here, this can be dangerous if we access that value later on,
@@ -15040,7 +15043,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 4);
             }
             if(tempmodel)
             {
@@ -15159,7 +15162,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 4);
             }
             if(tempmodel)
             {
@@ -15186,7 +15189,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 4);
             }
             if(tempmodel)
             {
