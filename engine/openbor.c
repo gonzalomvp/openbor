@@ -5286,7 +5286,7 @@ void cache_model_sprites(s_model *m, int ld)
     int i, f, instance;
     s_anim *anim;
     
-    bool bDebug = strcmp(m->name, "Bret_2");
+    bool bDebug = strcmp(m->name, "Bret_2") == 0;
     
     cachesprite(m->icon.def, ld, bDebug);
     cachesprite(m->icon.die, ld, bDebug);
