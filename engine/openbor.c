@@ -5288,18 +5288,18 @@ void cache_model_sprites(s_model *m, int ld)
     
     bool bDebug = strcmp(m->name, "Bret_2");
     
-    cachesprite(m->icon.def, ld);
-    cachesprite(m->icon.die, ld);
-    cachesprite(m->icon.get, ld);
-    cachesprite(m->icon.mphigh, ld);
-    cachesprite(m->icon.mplow, ld);
-    cachesprite(m->icon.mpmed, ld);
-    cachesprite(m->icon.pain, ld);
-    cachesprite(m->icon.weapon, ld);
+    cachesprite(m->icon.def, ld, bDebug);
+    cachesprite(m->icon.die, ld, bDebug);
+    cachesprite(m->icon.get, ld, bDebug);
+    cachesprite(m->icon.mphigh, ld, bDebug);
+    cachesprite(m->icon.mplow, ld, bDebug);
+    cachesprite(m->icon.mpmed, ld, bDebug);
+    cachesprite(m->icon.pain, ld, bDebug);
+    cachesprite(m->icon.weapon, ld, bDebug);
     cachesound(m->diesound, ld);
     for(i = 0; i < MAX_PLAYERS; i++)
     {
-        cachesprite(m->parrow[i][0], ld);
+        cachesprite(m->parrow[i][0], ld, bDebug);
     }
 
     //if(hasFreetype(model, MF_ANIMLIST)){
@@ -5310,7 +5310,7 @@ void cache_model_sprites(s_model *m, int ld)
         {
             for(f = 0; f < anim->numframes; f++)
             {
-                cachesprite(anim->sprite[f], ld);
+                cachesprite(anim->sprite[f], ld, bDebug);
                 if(anim->soundtoplay)
                 {
                     cachesound(anim->soundtoplay[f], ld);
