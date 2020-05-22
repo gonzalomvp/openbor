@@ -2629,6 +2629,10 @@ int loadGameFile()
                 bonus += savelevel[i].times_completed;
             }
             //printf("Bonus: %d \n",bonus);
+            if(unlock_all)
+            {
+              bonus = 999;
+            }
             finisheds_games_count = bonus; //TAG_YO Cargamos el número de veces que se ha pasado el juego en la variable global finisheds_games_count
     }
 
@@ -36076,14 +36080,7 @@ void playgame(int *players,  unsigned which_set, int useSavedGame)
     }
     // borShutdown(1, "Illegal set chosen: index %i (there are only %i sets)!", which_set, num_difficulties);
 
-    if(unlock_all)
-    {
-      allow_secret_chars = 1;
-    }
-    else
-    {
-      allow_secret_chars = set->ifcomplete;
-    }
+    allow_secret_chars = set->ifcomplete;
     PLAYER_LIVES = set->lives;
     musicoverlap = set->musicoverlap;
     fade = set->custfade;
