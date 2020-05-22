@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
 
    // Test command line argument to launch MOD
    int romArg = 0;
-   if(argc == 2) {
+   if(argc > 1) {
       memcpy(packfile, argv[1], strlen(argv[1]));
       if(fileExists(packfile)) {
          romArg = 1;

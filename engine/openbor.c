@@ -687,6 +687,7 @@ int                 timeleft			= 0;
 int                 oldtime             = 0;                    // One second back from time left.
 int                 holez				= 0;					// Used for setting spawn points
 int                 allow_secret_chars	= 0;
+int                 unlock_all          = 1;
 unsigned int        lifescore			= 50000;				// Number of points needed to earn a 1-up
 unsigned int        credscore			= 0;					// Number of points needed to earn a credit
 int                 mpblock				= 0;					// Take chip damage from health or MP first?
@@ -36075,7 +36076,14 @@ void playgame(int *players,  unsigned which_set, int useSavedGame)
     }
     // borShutdown(1, "Illegal set chosen: index %i (there are only %i sets)!", which_set, num_difficulties);
 
-    allow_secret_chars = set->ifcomplete;
+    if(unlock_all)
+    {
+      allow_secret_chars = 1;
+    }
+    else
+    {
+      allow_secret_chars = set->ifcomplete;
+    }
     PLAYER_LIVES = set->lives;
     musicoverlap = set->musicoverlap;
     fade = set->custfade;
@@ -38716,8 +38724,17 @@ void openborMain(int argc, char **argv)
             printFileUsageStatistics = getValidInt((char *)argv[1] + 14, "", "");
         }
     }
-
-
+    
+    if(argc > 2)
+    {
+      argl = strlen(argv[2]);
+      if(argl == 10 && !memcmp(argv[2], "unlock_all", 10))
+        {
+          unlock_all = 1;
+          printf("All secrets unlocked\n");
+        }
+    }
+    
     modelcmdlist = createModelCommandList();
     modelstxtcmdlist = createModelstxtCommandList();
     levelcmdlist = createLevelCommandList();
