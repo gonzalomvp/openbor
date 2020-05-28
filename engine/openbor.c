@@ -687,6 +687,7 @@ int                 timeleft			= 0;
 int                 oldtime             = 0;                    // One second back from time left.
 int                 holez				= 0;					// Used for setting spawn points
 int                 allow_secret_chars	= 0;
+int                 unlock_all          = 0;
 unsigned int        lifescore			= 50000;				// Number of points needed to earn a 1-up
 unsigned int        credscore			= 0;					// Number of points needed to earn a credit
 int                 mpblock				= 0;					// Take chip damage from health or MP first?
@@ -2626,6 +2627,10 @@ int loadGameFile()
         for(i = 0; i < num_difficulties; i++) if(savelevel[i].times_completed > 0)
             {
                 bonus += savelevel[i].times_completed;
+            }
+            if(unlock_all)
+            {
+              bonus = 999;
             }
             //printf("Bonus: %d \n",bonus);
             finisheds_games_count = bonus; //TAG_YO Cargamos el número de veces que se ha pasado el juego en la variable global finisheds_games_count
@@ -15041,7 +15046,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
@@ -15160,7 +15165,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
@@ -15187,7 +15192,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
@@ -38681,7 +38686,13 @@ void openborMain(int argc, char **argv)
             printFileUsageStatistics = getValidInt((char *)argv[1] + 14, "", "");
         }
     }
-
+    
+    argl = strlen(argv[argc - 1]);
+    if(argl == 10 && !memcmp(argv[argc - 1], "unlock_all", 10))
+    {
+      unlock_all = 1;
+      printf("All secrets unlocked\n");
+    }
 
     modelcmdlist = createModelCommandList();
     modelstxtcmdlist = createModelstxtCommandList();
