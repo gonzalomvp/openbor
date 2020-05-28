@@ -15041,7 +15041,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
@@ -15160,7 +15160,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
@@ -15187,7 +15187,7 @@ void load_level(char *filename)
             }
             else
             {
-                tempmodel = load_cached_model(GET_ARG(1), filename, 0);
+                tempmodel = load_cached_model(GET_ARG(1), filename, 3);
             }
             if(tempmodel)
             {
