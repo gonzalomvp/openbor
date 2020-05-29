@@ -12454,7 +12454,7 @@ int load_models()
       update_loading(&loadingbg[0], ++pos, modelLoadCount);
     }
     
-    for(i = 0, i < models_cached; i++)
+    for(i = 0; i < models_cached; i++)
     {
         //printf("Checking '%s' '%s'\n", model_cache[i].name, model_cache[i].path);
         if(stricmp(model_cache[i].name, "global_model") == 0)
