@@ -216,6 +216,7 @@ char                rush_names[2][MAX_NAME_LEN];
 char				skipselect[MAX_PLAYERS][MAX_NAME_LEN];
 char                branch_name[MAX_NAME_LEN + 1];  // Used for branches
 char                allowselect_args[MAX_ALLOWSELECT_LEN]; // stored allowselect players
+char                allowselect_cmdline_args[MAX_ALLOWSELECT_LEN] = {""};
 int					useSave = 0;
 int					useSet = -1;
 unsigned char       pal[MAX_PAL_SIZE] = {""};
@@ -4928,8 +4929,15 @@ static void load_playable_list(char *buf)
     ArgList arglist;
     char argbuf[MAX_ALLOWSELECT_LEN] = "";
 
-    ParseArgs(&arglist, buf, argbuf);
-
+    if(strlen(allowselect_cmdline_args) > 0)
+    {
+      ParseArgs(&arglist, allowselect_cmdline_args, argbuf);
+    }
+    else
+    {
+      ParseArgs(&arglist, buf, argbuf);
+    }
+    
     // avoid to load characters if there isn't an allowselect
     if ( stricmp(value = GET_ARG(0), "allowselect") != 0 ) return;
 
@@ -12387,8 +12395,32 @@ int load_models()
 
     // Defer load_cached_model, so you can define models after their nested model.
     printf("\n");
-
-    for(i = 0, pos = 0; i < models_cached; i++)
+    
+    char argbuf_allowselect[MAX_ALLOWSELECT_LEN] = "";
+    ParseArgs(&arglist, allowselect_cmdline_args, argbuf_allowselect);
+    allowselect_cmdline_args[0] = '\0';
+    char* model_name;
+    
+    modelLoadCount += arglist.count;
+    pos = 0;
+    
+    for(i = 0; (model_name = GET_ARG(i))[0]; i++)
+    {
+      int cacheindex = get_cached_model_index(model_name);
+      if(cacheindex >= 0)
+      {
+        load_cached_model(model_name, "models.txt", 0);
+        if(strlen(allowselect_cmdline_args) == 0)
+        {
+          strcat(allowselect_cmdline_args, "allowselect");
+        }
+        strcat(allowselect_cmdline_args, " ");
+        strcat(allowselect_cmdline_args, model_name);
+      }
+      update_loading(&loadingbg[0], ++pos, modelLoadCount);
+    }
+    
+    for(i = 0; i < models_cached; i++)
     {
         //printf("Checking '%s' '%s'\n", model_cache[i].name, model_cache[i].path);
         if(stricmp(model_cache[i].name, "global_model") == 0)
@@ -38685,15 +38717,21 @@ void openborMain(int argc, char **argv)
         {
             printFileUsageStatistics = getValidInt((char *)argv[1] + 14, "", "");
         }
+        
+        argl = strlen(argv[argc - 1]);
+        if(argl == 10 && !memcmp(argv[argc - 1], "unlock_all", 10))
+        {
+          unlock_all = 1;
+          printf("All secrets unlocked\n");
+        }
+        
+        for(int i = 1; i < argc; ++i)
+        {
+          strcat(allowselect_cmdline_args, argv[i]);
+          strcat(allowselect_cmdline_args, " ");
+        }
     }
     
-    argl = strlen(argv[argc - 1]);
-    if(argl == 10 && !memcmp(argv[argc - 1], "unlock_all", 10))
-    {
-      unlock_all = 1;
-      printf("All secrets unlocked\n");
-    }
-
     modelcmdlist = createModelCommandList();
     modelstxtcmdlist = createModelstxtCommandList();
     levelcmdlist = createLevelCommandList();
