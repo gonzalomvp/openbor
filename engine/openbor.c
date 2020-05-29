@@ -12451,7 +12451,7 @@ int load_models()
     
     for(i = 0; (value = GET_ARG(i))[0]; i++)
     {
-      cacheindex = get_cached_model_index(value);
+      int cacheindex = get_cached_model_index(value);
       if(cacheindex >= 0)
       {
         load_cached_model(value, "models.txt", 0);
