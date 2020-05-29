@@ -12451,8 +12451,10 @@ int load_models()
     
     for(i = 0; (value = GET_ARG(i))[0]; i++)
     {
-      if(load_cached_model(value, "models.txt", 0))
+      cacheindex = get_cached_model_index(value);
+      if(cacheindex >= 0)
       {
+        load_cached_model(value, "models.txt", 0);
         if(strlen(allowselect_cmdline_args) == 0)
         {
           strcat(allowselect_cmdline_args, "allowselect");
