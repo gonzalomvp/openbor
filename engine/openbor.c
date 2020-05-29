@@ -12429,25 +12429,14 @@ int load_models()
 
     // Defer load_cached_model, so you can define models after their nested model.
     printf("\n");
-
-    for(i = 0, pos = 0; i < models_cached; i++)
-    {
-        //printf("Checking '%s' '%s'\n", model_cache[i].name, model_cache[i].path);
-        if(stricmp(model_cache[i].name, "global_model") == 0)
-        {
-            global_model = i;
-        }
-        if(model_cache[i].loadflag)
-        {
-            load_cached_model(model_cache[i].name, "models.txt", 0);
-            update_loading(&loadingbg[0], ++pos, modelLoadCount);
-        }
-    }
     
     char argbuffer[MAX_ALLOWSELECT_LEN] = "";
     ParseArgs(&arglist, allowselect_cmdline_args, argbuffer);
     allowselect_cmdline_args[0] = '\0';
     char* value;
+    
+    modelLoadCount += arglist.count;
+    pos = 0;
     
     for(i = 0; (value = GET_ARG(i))[0]; i++)
     {
@@ -12462,6 +12451,21 @@ int load_models()
         strcat(allowselect_cmdline_args, " ");
         strcat(allowselect_cmdline_args, value);
       }
+      update_loading(&loadingbg[0], ++pos, modelLoadCount);
+    }
+    
+    for(i = 0, i < models_cached; i++)
+    {
+        //printf("Checking '%s' '%s'\n", model_cache[i].name, model_cache[i].path);
+        if(stricmp(model_cache[i].name, "global_model") == 0)
+        {
+            global_model = i;
+        }
+        if(model_cache[i].loadflag)
+        {
+            load_cached_model(model_cache[i].name, "models.txt", 0);
+            update_loading(&loadingbg[0], ++pos, modelLoadCount);
+        }
     }
     
     printf("\nLoading models...............\tDone!\n");
