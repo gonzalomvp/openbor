@@ -38757,14 +38757,11 @@ void openborMain(int argc, char **argv)
         }
     }
     
-    if(argc > 2)
+    argl = strlen(argv[argc - 1]);
+    if(argl == 10 && !memcmp(argv[argc - 1], "unlock_all", 10))
     {
-      argl = strlen(argv[2]);
-      if(argl == 10 && !memcmp(argv[2], "unlock_all", 10))
-        {
-          unlock_all = 1;
-          printf("All secrets unlocked\n");
-        }
+      unlock_all = 1;
+      printf("All secrets unlocked\n");
     }
     
     modelcmdlist = createModelCommandList();
