@@ -18121,13 +18121,17 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
 
     if(!model)
     {
+        if(index < 0 && name)
+        {
+            index = get_cached_model_index(name);
+        }
         if(index >= 0)
         {
             model = model_cache[index].model;
-        }
-        else if(name)
-        {
-            model = findmodel(name);
+            if(!model)
+            {
+              model = load_cached_model(model_cache[index].name, "models.txt", 3);
+            }
         }
     }
 
