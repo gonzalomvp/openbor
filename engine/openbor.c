@@ -18154,6 +18154,8 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
     float *ofs;
     Varlist *vars;
     s_scripts *scripts;
+    
+    printf("GONZALO: index:%d, model:%s\n", index, name);
 
     if(!model)
     {
@@ -18167,6 +18169,7 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
             if(!model)
             {
               int cacheindex = get_cached_model_index(name);
+              printf("GONZALO: cacheindex:%d, model:%s\n", cacheindex, name);
               if(cacheindex >= 0)
               {
                 model = load_cached_model(name, "models.txt", 0);
