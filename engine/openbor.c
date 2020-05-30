@@ -12413,25 +12413,28 @@ int load_models()
         if(index >= 0)
         {
           int loadflag = atoi(load);
-          if(loadflag != model_cache[index].loadflag)
+          if(loadflag)
           {
-            model_cache[index].loadflag = loadflag;
-            if(loadflag)
+            if(strlen(allowselect_cmdline_args) == 0)
+            {
+              strcat(allowselect_cmdline_args, "allowselect");
+            }
+            strcat(allowselect_cmdline_args, " ");
+            strcat(allowselect_cmdline_args, name);
+            
+            if(loadflag != model_cache[index].loadflag)
             {
               ++modelLoadCount;
-              
-              if(strlen(allowselect_cmdline_args) == 0)
-              {
-                strcat(allowselect_cmdline_args, "allowselect");
-              }
-              strcat(allowselect_cmdline_args, " ");
-              strcat(allowselect_cmdline_args, name);
             }
-            else
+          }
+          else
+          {
+            if(loadflag != model_cache[index].loadflag)
             {
               --modelLoadCount;
             }
           }
+          model_cache[index].loadflag = loadflag;
         }
       }
     }
