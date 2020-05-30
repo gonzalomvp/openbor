@@ -12415,8 +12415,8 @@ int load_models()
           int loadflag = atoi(load);
           if(loadflag != model_cache[index].loadflag)
           {
-            model_cache[index].loadflag = model_loadflag;
-            if(model_loadflag)
+            model_cache[index].loadflag = loadflag;
+            if(loadflag)
             {
               ++modelLoadCount;
             }
