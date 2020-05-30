@@ -10555,7 +10555,7 @@ HRESULT openbor_setspawnentry(ScriptVariant **varlist, ScriptVariant **pretvar, 
           printf("GONZALO: cacheindex: %d\n", cacheindex);
           if(cacheindex >= 0)
           {
-            spawnentry.model = model_cache[cacheindex].model;
+            spawnentry.name = model_cache[cacheindex].name;
           }
         }
         break;

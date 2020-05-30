@@ -18159,18 +18159,18 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
 
     if(!model)
     {
+        if(index < 0 && name)
+        {
+            index = get_cached_model_index(name);
+        }
+      
         if(index >= 0)
         {
             model = model_cache[index].model;
-        }
-        else if(name)
-        {
-          int cacheindex = get_cached_model_index(name);
-          printf("GONZALO: cacheindex:%d, model:%s\n", cacheindex, name);
-          if(cacheindex >= 0)
-          {
-            model = model_cache[cacheindex].model;
-          }
+            if(!model)
+            {
+              model = load_cached_model(model_cache[index].name, "models.txt", 3);
+            }
         }
     }
 
@@ -18183,12 +18183,6 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
         else if(name)
         	printf("FATAL: attempt to spawn object with invalid model name (%s)!\n", name);*/
         return NULL;
-    }
-    
-    if(!findmodel(model->name))
-    {
-      printf("GONZALO: model %s was not loaded\n", model->name);
-      load_cached_model(model->name, "models.txt", 3);
     }
 
     if(ent_count >= ent_list_size && !alloc_ents())
