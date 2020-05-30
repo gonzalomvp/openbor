@@ -12419,19 +12419,19 @@ int load_models()
             if(loadflag)
             {
               ++modelLoadCount;
+              
+              if(strlen(allowselect_cmdline_args) == 0)
+              {
+                strcat(allowselect_cmdline_args, "allowselect");
+              }
+              strcat(allowselect_cmdline_args, " ");
+              strcat(allowselect_cmdline_args, name);
             }
             else
             {
               --modelLoadCount;
             }
           }
-          
-          if(strlen(allowselect_cmdline_args) == 0)
-          {
-            strcat(allowselect_cmdline_args, "allowselect");
-          }
-          strcat(allowselect_cmdline_args, " ");
-          strcat(allowselect_cmdline_args, name);
         }
       }
     }
