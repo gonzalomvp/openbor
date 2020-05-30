@@ -12399,28 +12399,44 @@ int load_models()
     char argbuf_allowselect[MAX_ALLOWSELECT_LEN] = "";
     ParseArgs(&arglist, allowselect_cmdline_args, argbuf_allowselect);
     allowselect_cmdline_args[0] = '\0';
-    char* model_name;
+    char *cmdline_arg;
     
-    modelLoadCount += arglist.count;
-    pos = 0;
-    
-    for(i = 0; (model_name = GET_ARG(i))[0]; i++)
+    for(i = 0; (cmdline_arg = GET_ARG(i))[0]; i++)
     {
-      int cacheindex = get_cached_model_index(model_name);
-      if(cacheindex >= 0)
+      char delim[] = "=";
+      char *name = strtok(cmdline_arg, delim);
+      char *load = strtok(NULL, delim);
+      
+      if(load)
       {
-        load_cached_model(model_name, "models.txt", 0);
-        if(strlen(allowselect_cmdline_args) == 0)
+        int index = get_cached_model_index(name);
+        if(index >= 0)
         {
-          strcat(allowselect_cmdline_args, "allowselect");
+          int loadflag = atoi(load);
+          if(loadflag != model_cache[index].loadflag)
+          {
+            model_cache[index].loadflag = loadflag;
+            if(loadflag)
+            {
+              ++modelLoadCount;
+            }
+            else
+            {
+              --modelLoadCount;
+            }
+          }
+          
+          if(strlen(allowselect_cmdline_args) == 0)
+          {
+            strcat(allowselect_cmdline_args, "allowselect");
+          }
+          strcat(allowselect_cmdline_args, " ");
+          strcat(allowselect_cmdline_args, name);
         }
-        strcat(allowselect_cmdline_args, " ");
-        strcat(allowselect_cmdline_args, model_name);
       }
-      update_loading(&loadingbg[0], ++pos, modelLoadCount);
     }
     
-    for(i = 0; i < models_cached; i++)
+    for(i = 0, pos = 0; i < models_cached; i++)
     {
         //printf("Checking '%s' '%s'\n", model_cache[i].name, model_cache[i].path);
         if(stricmp(model_cache[i].name, "global_model") == 0)
