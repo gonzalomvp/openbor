@@ -73,6 +73,16 @@ s_model *findmodel(char *modelname)
     {
         temp = List_Retrieve(modellist);
     }
+    
+    if(!temp)
+    {
+      int cacheindex = get_cached_model_index(modelname);
+      if(cacheindex >= 0)
+      {
+        temp = load_cached_model(modelname, "models.txt", 3);
+      }
+    }
+    
     return temp;
 }
 
