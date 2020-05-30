@@ -10547,10 +10547,12 @@ HRESULT openbor_setspawnentry(ScriptVariant **varlist, ScriptVariant **pretvar, 
             goto setspawnentry_error;
         }
         char* model_name = (char *)StrCache_Get(arg->strVal);
+        printf("GONZALO: setspawnentry: %s\n", model_name);
         spawnentry.model = findmodel(model_name);
         if(!spawnentry.model)
         {
           int cacheindex = get_cached_model_index(model_name);
+          printf("GONZALO: cacheindex: %d\n", cacheindex);
           if(cacheindex >= 0)
           {
             spawnentry.model = model_cache[cacheindex].model;
