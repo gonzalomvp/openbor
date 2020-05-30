@@ -12440,7 +12440,7 @@ int load_models()
     
     for(i = 0; (value = GET_ARG(i))[0]; i++)
     {
-      printf("Arg:%s\n", %value);
+      printf("Arg:%s\n", value);
       char* token = NULL;
       char delim[] = "=";
       char* model_name = strtok(value, delim);
