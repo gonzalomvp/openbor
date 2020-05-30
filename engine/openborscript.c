@@ -10546,8 +10546,16 @@ HRESULT openbor_setspawnentry(ScriptVariant **varlist, ScriptVariant **pretvar, 
             printf("You must use a string value for spawn entry's name property: function setspawnentry.\n");
             goto setspawnentry_error;
         }
-        strcpy(spawnentry.name, (char *)StrCache_Get(arg->strVal));
-        spawnentry.model = findmodel(spawnentry.name);
+        char* model_name = (char *)StrCache_Get(arg->strVal);
+        spawnentry.model = findmodel(model_name);
+        if(!spawnentry.model)
+        {
+          int cacheindex = get_cached_model_index(model_name);
+          if(cacheindex >= 0)
+          {
+            spawnentry.model = model_cache[cacheindex].model;
+          }
+        }
         break;
     case _sse_alias:
         if(arg->vt != VT_STR)
