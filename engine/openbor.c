@@ -18155,7 +18155,7 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
     Varlist *vars;
     s_scripts *scripts;
     
-    printf("GONZALO: index:%d, model:%s\n", index, name);
+    printf("GONZALO: index:%d, model:%s, pointer:%p\n", index, name, model);
 
     if(!model)
     {
@@ -18165,16 +18165,12 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
         }
         else if(name)
         {
-            model = findmodel(name);
-            if(!model)
-            {
-              int cacheindex = get_cached_model_index(name);
-              printf("GONZALO: cacheindex:%d, model:%s\n", cacheindex, name);
-              if(cacheindex >= 0)
-              {
-                model = load_cached_model(name, "models.txt", 0);
-              }
-            }
+          int cacheindex = get_cached_model_index(name);
+          printf("GONZALO: cacheindex:%d, model:%s\n", cacheindex, name);
+          if(cacheindex >= 0)
+          {
+            model = model_cache[cacheindex].model;
+          }
         }
     }
 
@@ -18187,6 +18183,12 @@ entity *spawn(float x, float z, float a, int direction, char *name, int index, s
         else if(name)
         	printf("FATAL: attempt to spawn object with invalid model name (%s)!\n", name);*/
         return NULL;
+    }
+    
+    if(!findmodel(model->name))
+    {
+      printf("GONZALO: model %s was not loaded\n", model->name);
+      load_cached_model(model->name, "models.txt", 3);
     }
 
     if(ent_count >= ent_list_size && !alloc_ents())
