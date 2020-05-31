@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 	packfile_mode(0);
 
 #ifdef ANDROID
-    if(strstr(SDL_AndroidGetExternalStoragePath(), "org.openbor.engine"))
+    if(strstr(SDL_AndroidGetExternalStoragePath(), "org.openborfflns.engine"))
     {
         strcpy(rootDir, "/mnt/sdcard/OpenBOR/");
         strcpy(paksDir, "/mnt/sdcard/OpenBOR/Paks");

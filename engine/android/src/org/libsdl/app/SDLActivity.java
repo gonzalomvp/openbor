@@ -359,7 +359,7 @@ public class SDLActivity extends Activity {
 			File outFolderDefault = new File(Environment.getExternalStorageDirectory() + "/OpenBOR/Paks");  //Default ouput folder
             File outFile = new File(outFolder, version + ".pak"); //set local output fileame as version number
 
-            if(appCtx.getPackageName().equals("org.openbor.engine")) {
+            if(appCtx.getPackageName().equals("org.openborfflns.engine")) {
                 if (!outFolderDefault.isDirectory()) {
                     outFolderDefault.mkdirs();
                     toast = "Folder: ("+outFolderDefault+") is empty!";

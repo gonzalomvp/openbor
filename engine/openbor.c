@@ -2622,16 +2622,12 @@ int loadGameFile()
         clearSavedGame();
         result = 0;
     }
-    else
+    else if(!unlock_all)
     {
         bonus = 0;
         for(i = 0; i < num_difficulties; i++) if(savelevel[i].times_completed > 0)
             {
                 bonus += savelevel[i].times_completed;
-            }
-            if(unlock_all)
-            {
-              bonus = 999;
             }
             //printf("Bonus: %d \n",bonus);
             finisheds_games_count = bonus; //TAG_YO Cargamos el número de veces que se ha pasado el juego en la variable global finisheds_games_count
@@ -38745,6 +38741,8 @@ void openborMain(int argc, char **argv)
         if(argl == 10 && !memcmp(argv[argc - 1], "unlock_all", 10))
         {
           unlock_all = 1;
+          bonus = 999;
+          finisheds_games_count = bonus;
           printf("All secrets unlocked\n");
         }
         
