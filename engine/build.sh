@@ -212,6 +212,18 @@ function windows {
   . ./environ.sh 5
   if test $WINDEV; then
     make clean BUILD_WIN=1
+    #first remove old resource file and update with build number from build_number.h.
+		if test -e "resources/OpenBOR.res"; then
+			rm "resources/OpenBOR.res";
+		fi
+
+		# if it's cross-compile for Windows from Linux, then
+		# find a proper tool
+		if test -e "/usr/bin/i686-w64-mingw32-gcc" && test -e "/usr/bin/i686-w64-mingw32-windres"; then
+			i686-w64-mingw32-windres resources/OpenBOR.rc -o resources/OpenBOR.res -O coff
+		else
+			windres.exe resources/OpenBOR.rc -o resources/OpenBOR.res -O coff
+		fi
     make BUILD_WIN=1
     if test -f "./OpenBOR.exe"; then
       if test ! -e "./releases/WINDOWS" ; then
