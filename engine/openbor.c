@@ -4921,11 +4921,10 @@ static void load_playable_list(char *buf)
 {
     int i, index;
     char *value;
-    s_model *playermodels = NULL;
     ArgList arglist;
     char argbuf[MAX_ALLOWSELECT_LEN] = "";
 
-    if(strlen(allowselect_cmdline_args) > 0)
+    if(strlen(allowselect_cmdline_args) > 0 && unlock_all)
     {
       ParseArgs(&arglist, allowselect_cmdline_args, argbuf);
     }
@@ -4949,14 +4948,15 @@ static void load_playable_list(char *buf)
 
     for(i = 1; (value = GET_ARG(i))[0]; i++)
     {
-        playermodels = findmodel(value);
-        //if(playermodels == NULL) borShutdown(1, "Player model '%s' is not loaded.\n", value);
-        index = get_cached_model_index(playermodels->name);
+        index = get_cached_model_index(value);
         if(index == -1)
         {
             borShutdown(1, "Player model '%s' is not cached.\n", value);
         }
-        model_cache[index].selectable = 1;
+        else if(model_cache[index].loadflag)
+        {
+            model_cache[index].selectable = 1;
+        }
     }
 
     return;
